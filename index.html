@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NIKO | OMNI-DEVICE ATELIER WITH SIGNATURE</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; touch-action: none; }
+        #hud {
+            position: absolute; top: 20px; left: 20px; color: #00f2ff;
+            pointer-events: none; border-left: 2px solid #00f2ff; padding-left: 15px; z-index: 10;
+        }
+        .stat { font-size: max(10px, 1vw); margin-bottom: 5px; letter-spacing: 2px; }
+        #blink-flash {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: white; opacity: 0; pointer-events: none; z-index: 100;
+        }
+        #interaction-layer {
+            position: absolute; top:0; left:0; width: 100vw; height: 100vh; z-index: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="blink-flash"></div>
+    <div id="interaction-layer"></div>
+    <div id="hud">
+        <div class="stat">OPERATOR: NIKO</div>
+        <div class="stat" id="status">STATUS: STANDBY (CLICK TO WAKE)</div>
+        <div class="stat" id="stress-ui">CORE STABILITY: NOMINAL</div>
+        <div class="stat" id="gallery-count">MEMORIES: 0/5</div>
+    </div>
+
+    <script id="vShader" type="x-shader/x-vertex">
+        uniform float uTime;
+        uniform float uStress;
+        uniform float uAudio;
+        varying vec3 vColor;
+        void main() {
+            vec3 pos = position;
+            float angle = uTime * (0.5 + uStress) + length(pos.xz) * 0.1;
+            float s = sin(angle); float c = cos(angle);
+            pos.xz *= mat2(c, -s, s, c);
+            pos.y += sin(uTime + pos.x) * uAudio * 2.0;
+            
+            vColor = mix(vec3(0.0, 0.9, 1.0), vec3(1.0, 0.0, 0.2), uStress);
+            vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
+            
+            // Adaptation de la taille des particules selon l'écran
+            gl_PointSize = (4.0 + uAudio * 5.0) * (200.0 / -mvPos.z);
+            gl_Position = projectionMatrix * mvPos;
+        }
+    </script>
+
+    <script id="fShader" type="x-shader/x-fragment">
+        varying vec3 vColor;
+        void main() {
+            if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
+            gl_FragColor = vec4(vColor, 1.0);
+        }
+    </script>
+
+    <script>
+        let scene, camera, renderer, points, material;
+        let audioContext, analyser, dataArray;
+        let stress = 0, gallery = [];
+        let isWebGazerActive = false;
+        let syntheticBreathing = 0; // Fallback si pas de micro
+        const MAX_GALLERY = 5;
+
+        // --- INITIALISATION ---
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimisation mobile
+            document.body.appendChild(renderer.domElement);
+
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(15000 * 3);
+            for(let i=0; i<45000; i++) pos[i] = (Math.random()-0.5) * 80;
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+
+            material = new THREE.ShaderMaterial({
+                uniforms: { uTime: {value: 0}, uStress: {value: 0}, uAudio: {value: 0} },
+                vertexShader: document.getElementById('vShader').textContent,
+                fragmentShader: document.getElementById('fShader').textContent,
+                transparent: true, blending: THREE.AdditiveBlending, depthTest: false
+            });
+
+            points = new THREE.Points(geo, material);
+            scene.add(points);
+            camera.position.z = window.innerWidth < 768 ? 120 : 100; // Recul caméra sur mobile
+
+            // Tentative d'initialisation de WebGazer (Echoue silencieusement sur certains mobiles)
+            try {
+                webgazer.setGazeListener((data) => {
+                    if (!data) { handleBlink(); return; }
+                    isWebGazerActive = true;
+                    updateVortexRotation(data.x, data.y);
+                }).begin();
+                webgazer.showVideoPreview(false).showPredictionPoints(false);
+            } catch(e) {
+                console.warn("WebGazer non supporté sur ce navigateur.");
+            }
+
+            // Fallback Tactile & Souris
+            const interactionLayer = document.getElementById('interaction-layer');
+            interactionLayer.addEventListener('mousemove', (e) => {
+                if(!isWebGazerActive) updateVortexRotation(e.clientX, e.clientY);
+            });
+            interactionLayer.addEventListener('touchmove', (e) => {
+                if(!isWebGazerActive) updateVortexRotation(e.touches[0].clientX, e.touches[0].clientY);
+            }, {passive: true});
+
+            // Fallback Clignement par Double-Tap (Mobile) ou Double-Clic
+            interactionLayer.addEventListener('dblclick', handleBlink);
+            let lastTap = 0;
+            interactionLayer.addEventListener('touchstart', (e) => {
+                let currentTime = new Date().getTime();
+                let tapLength = currentTime - lastTap;
+                if (tapLength < 500 && tapLength > 0) { handleBlink(); e.preventDefault(); }
+                lastTap = currentTime;
+            });
+
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+        }
+
+        function updateVortexRotation(x, y) {
+            const normX = (x / window.innerWidth) * 2 - 1;
+            const normY = -(y / window.innerHeight) * 2 + 1;
+            gsap.to(points.rotation, { x: normY * 0.5, y: normX * 0.5, duration: 0.8 });
+        }
+
+        async function initSensors() {
+            document.getElementById('status').innerText = "STATUS: INITIALIZING...";
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                source.connect(analyser);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                document.getElementById('status').innerText = "STATUS: FULL SENSORY SYNC";
+            } catch(err) {
+                document.getElementById('status').innerText = "STATUS: BASIC MODE (MIC DENIED)";
+            }
+        }
+
+        // --- BLINK & GALLERY WITH SIGNATURE ---
+        function handleBlink() {
+            if(gallery.length >= MAX_GALLERY) return; // Limite atteinte
+
+            gsap.to("#blink-flash", { opacity: 1, duration: 0.05, yoyo: true, repeat: 1 });
+            
+            // 1. Capture du canvas Three.js actuel
+            const originalImgData = renderer.domElement.toDataURL("image/png");
+
+            // 2. Création d'un canvas temporaire pour dessiner la signature
+            const tempCanvas = document.createElement('canvas');
+            const ctx = tempCanvas.getContext('2d');
+            const img = new Image();
+
+            img.onload = function() {
+                // Ajuster le canvas temporaire à la taille de l'image capturée
+                tempCanvas.width = img.width;
+                tempCanvas.height = img.height;
+
+                // Dessiner l'image originale
+                ctx.drawImage(img, 0, 0);
+
+                // Configurer et dessiner la signature "Niko 2026"
+                // Utilisation d'une police futuriste et de la couleur cyan par défaut
+                ctx.font = 'bold 24px Orbitron, sans-serif'; 
+                ctx.fillStyle = '#00f2ff';
+                ctx.textAlign = 'right';
+                // Positionner en bas à droite avec une marge
+                ctx.fillText('Niko 2026', img.width - 30, img.height - 30);
+
+                // 3. Créer la texture Three.js à partir du canvas signé
+                const signedTex = new THREE.CanvasTexture(tempCanvas);
+                const plane = new THREE.Mesh(
+                    new THREE.PlaneGeometry(15, 10),
+                    new THREE.MeshBasicMaterial({ map: signedTex, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
+                );
+
+                // 4. Positionner en orbite
+                const angle = (gallery.length / MAX_GALLERY) * Math.PI * 2;
+                plane.position.set(Math.cos(angle)*60, Math.sin(angle)*30, Math.sin(angle)*60);
+                plane.lookAt(0,0,0);
+                scene.add(plane);
+                gallery.push(plane);
+                document.getElementById('gallery-count').innerText = `MEMORIES: ${gallery.length}/5`;
+            };
+
+            // Charger l'image originale pour déclencher le dessin de la signature
+            img.src = originalImgData;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.position.z = window.innerWidth < 768 ? 120 : 100;
+        }
+
+        function animate(t) {
+            requestAnimationFrame(animate);
+            material.uniforms.uTime.value = t * 0.001;
+            
+            if (analyser && dataArray) {
+                analyser.getByteFrequencyData(dataArray);
+                let vol = dataArray.reduce((a,b) => a+b) / dataArray.length;
+                material.uniforms.uAudio.value = vol / 20;
+                stress = Math.min(1, vol / 50);
+            } else {
+                // Respiration synthétique si pas de micro
+                syntheticBreathing = Math.sin(t * 0.002) * 0.5 + 0.5;
+                material.uniforms.uAudio.value = syntheticBreathing * 2.0;
+                stress = syntheticBreathing * 0.3; 
+            }
+
+            material.uniforms.uStress.value = stress;
+            document.getElementById('stress-ui').innerText = `CORE LOAD: ${Math.floor(stress*100)}%`;
+
+            gallery.forEach((mesh, i) => {
+                mesh.position.y += Math.sin(t * 0.001 + i) * 0.1;
+                mesh.rotation.y += 0.01;
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        document.getElementById('interaction-layer').addEventListener('click', () => { 
+            if(!audioContext) initSensors(); 
+        }, {once: true});
+        
+        window.onload = init;
+    </script>
+</body>
+</html>
