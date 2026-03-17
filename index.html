@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NIKO | ATELIER NEURAL V17 - INVERTED MATRIX (AR)</title>
+    <title>NIKO | ATELIER NEURAL V18 - THE PERFECT MIRROR (AR)</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
@@ -55,7 +55,8 @@
         <div class="stat hud-btn" id="voice-btn">[ VOICE LINK : OFF ]</div><br>
         <div class="stat hud-btn" id="clear-paint-btn">[ CLEAR CANVAS ]</div><br>
         <div class="stat hud-btn" id="export-btn" style="color:#ffaa00;">[ EXPORT TO 3D FILE ]</div><br>
-        <div id="ar-container" style="margin-top: 10px;"></div> <div class="stat" id="reset-key-btn" style="cursor:pointer; font-size:10px; color:#ff0055; margin-top:10px;">[ PURGE API KEY ]</div>
+        <div id="ar-container" style="margin-top: 10px;"></div>
+        <div class="stat" id="reset-key-btn" style="cursor:pointer; font-size:10px; color:#ff0055; margin-top:10px;">[ PURGE API KEY ]</div>
     </div>
 
     <div id="ai-terminal">
@@ -96,13 +97,11 @@
             scene = new THREE.Scene(); 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             
-            // Renderer configuré pour la Réalité Augmentée (WebXR)
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             renderer.setSize(window.innerWidth, window.innerHeight); 
             renderer.xr.enabled = true; // ACTIVATION DU MODE AR
             document.body.appendChild(renderer.domElement);
 
-            // Bouton d'inversion matricielle (AR)
             const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
             arButton.style.position = 'relative';
             arButton.style.bottom = 'auto';
@@ -133,22 +132,18 @@
                 renderer.setSize(window.innerWidth, window.innerHeight); 
             });
 
-            // On utilise setAnimationLoop pour la compatibilité WebXR
             renderer.setAnimationLoop(animateThree);
         }
 
         function animateThree(t) {
             backgroundVortex.material.uniforms.uTime.value = (t || 0) * 0.001;
             
-            // Si le rendu est en mode écran classique
             if (!renderer.xr.isPresenting) {
                 backgroundVortex.visible = true;
                 gsap.to(backgroundVortex.rotation, { x: gazeTarget.y * 0.3, y: gazeTarget.x * 0.3, duration: 1.0 });
                 gsap.to(paintGroup.rotation, { x: gazeTarget.y * -0.1, y: gazeTarget.x * -0.1, duration: 1.5 });
             } else {
-                // En mode AR (Réalité augmentée), on cache le vortex noir pour voir la vraie pièce
                 backgroundVortex.visible = false;
-                // La position du groupe de peinture s'ajuste devant la caméra physique
                 paintGroup.position.set(0, 0, -50); 
                 paintGroup.rotation.y += 0.01;
             }
@@ -162,7 +157,8 @@
                 webgazer.setGazeListener((data) => {
                     if (data && !renderer.xr.isPresenting) {
                         isWebGazerActive = true;
-                        gazeTarget.x = (data.x / window.innerWidth) * 2 - 1;
+                        // INVERSION DE L'AXE X POUR LE REGARD
+                        gazeTarget.x = -((data.x / window.innerWidth) * 2 - 1);
                         gazeTarget.y = -(data.y / window.innerHeight) * 2 + 1;
                     }
                 }).begin();
@@ -176,7 +172,7 @@
         hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
         
         hands.onResults((results) => {
-            if (renderer.xr.isPresenting) return; // Désactive la peinture pendant la projection AR
+            if (renderer.xr.isPresenting) return; 
             
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
@@ -185,7 +181,8 @@
                 
                 if (distance < 0.05) {
                     if (!isPinching) isPinching = true;
-                    drawPaintStroke(indexTip.x, indexTip.y);
+                    // INVERSION DE L'AXE X POUR LA MAIN (1 - x)
+                    drawPaintStroke(1 - indexTip.x, indexTip.y);
                 } else { isPinching = false; }
             }
         });
@@ -315,6 +312,14 @@
                 }
             } catch(e) { updateTerminalMsg(`> SYMBIOTE: <span style="color:red;">LINK SEVERED. Reason: ${e.message}</span>`); }
         }
+
+        // INVERSION DE L'AXE X POUR LA SOURIS (FALLBACK)
+        document.getElementById('interaction-layer').addEventListener('mousemove', (e) => {
+            if(!isWebGazerActive) { 
+                gazeTarget.x = -((e.clientX / window.innerWidth) * 2 - 1); 
+                gazeTarget.y = -(e.clientY / window.innerHeight) * 2 + 1; 
+            }
+        });
 
         initThree();
     </script>
