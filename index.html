@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NIKO | ATELIER NEURAL V16 - THE INCARNATION</title>
+    <title>NIKO | ATELIER NEURAL V17 - INVERTED MATRIX (AR)</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     
     <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
-
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
@@ -33,11 +33,13 @@
         
         .color-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-left: 5px; box-shadow: 0 0 8px currentColor; }
         #interaction-layer { position: absolute; top:0; left:0; width: 100vw; height: 100vh; z-index: 1; }
+        .input_video { display: none; } 
     </style>
 </head>
 <body>
 
     <div id="interaction-layer"></div>
+    <video class="input_video"></video>
 
     <div id="auth-panel">
         <h2>> OMNI-MATRICE ENCRYPTED</h2>
@@ -52,8 +54,8 @@
         <div class="stat">BRUSH COLOR: <span id="brush-color-text" style="color:#00f2ff;">CYAN</span><span class="color-indicator" id="brush-color-dot" style="background-color:#00f2ff; color:#00f2ff;"></span></div>
         <div class="stat hud-btn" id="voice-btn">[ VOICE LINK : OFF ]</div><br>
         <div class="stat hud-btn" id="clear-paint-btn">[ CLEAR CANVAS ]</div><br>
-        <div class="stat hud-btn" id="export-btn" style="color:#ffaa00;">[ EXPORT TO REALITY ]</div><br>
-        <div class="stat" id="reset-key-btn" style="cursor:pointer; font-size:10px; color:#ff0055; margin-top:10px;">[ PURGE API KEY ]</div>
+        <div class="stat hud-btn" id="export-btn" style="color:#ffaa00;">[ EXPORT TO 3D FILE ]</div><br>
+        <div id="ar-container" style="margin-top: 10px;"></div> <div class="stat" id="reset-key-btn" style="cursor:pointer; font-size:10px; color:#ff0055; margin-top:10px;">[ PURGE API KEY ]</div>
     </div>
 
     <div id="ai-terminal">
@@ -93,9 +95,23 @@
         function initThree() {
             scene = new THREE.Scene(); 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            
+            // Renderer configuré pour la Réalité Augmentée (WebXR)
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             renderer.setSize(window.innerWidth, window.innerHeight); 
+            renderer.xr.enabled = true; // ACTIVATION DU MODE AR
             document.body.appendChild(renderer.domElement);
+
+            // Bouton d'inversion matricielle (AR)
+            const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+            arButton.style.position = 'relative';
+            arButton.style.bottom = 'auto';
+            arButton.style.fontFamily = 'Orbitron';
+            arButton.style.backgroundColor = 'transparent';
+            arButton.style.color = '#bd00ff';
+            arButton.style.border = '1px solid #bd00ff';
+            arButton.innerText = "[ INVERT MATRIX (AR) ]";
+            document.getElementById('ar-container').appendChild(arButton);
 
             const geo = new THREE.BufferGeometry(); const pos = new Float32Array(15000);
             for(let i=0; i<15000; i++) pos[i] = (Math.random()-0.5) * 150;
@@ -116,14 +132,27 @@
                 camera.updateProjectionMatrix(); 
                 renderer.setSize(window.innerWidth, window.innerHeight); 
             });
-            animateThree();
+
+            // On utilise setAnimationLoop pour la compatibilité WebXR
+            renderer.setAnimationLoop(animateThree);
         }
 
         function animateThree(t) {
-            requestAnimationFrame(animateThree);
             backgroundVortex.material.uniforms.uTime.value = (t || 0) * 0.001;
-            gsap.to(backgroundVortex.rotation, { x: gazeTarget.y * 0.3, y: gazeTarget.x * 0.3, duration: 1.0 });
-            gsap.to(paintGroup.rotation, { x: gazeTarget.y * -0.1, y: gazeTarget.x * -0.1, duration: 1.5 });
+            
+            // Si le rendu est en mode écran classique
+            if (!renderer.xr.isPresenting) {
+                backgroundVortex.visible = true;
+                gsap.to(backgroundVortex.rotation, { x: gazeTarget.y * 0.3, y: gazeTarget.x * 0.3, duration: 1.0 });
+                gsap.to(paintGroup.rotation, { x: gazeTarget.y * -0.1, y: gazeTarget.x * -0.1, duration: 1.5 });
+            } else {
+                // En mode AR (Réalité augmentée), on cache le vortex noir pour voir la vraie pièce
+                backgroundVortex.visible = false;
+                // La position du groupe de peinture s'ajuste devant la caméra physique
+                paintGroup.position.set(0, 0, -50); 
+                paintGroup.rotation.y += 0.01;
+            }
+            
             renderer.render(scene, camera);
         }
 
@@ -131,7 +160,7 @@
             document.getElementById('status').innerText = "STATUS: IGNITING SENSORS...";
             try {
                 webgazer.setGazeListener((data) => {
-                    if (data) {
+                    if (data && !renderer.xr.isPresenting) {
                         isWebGazerActive = true;
                         gazeTarget.x = (data.x / window.innerWidth) * 2 - 1;
                         gazeTarget.y = -(data.y / window.innerHeight) * 2 + 1;
@@ -142,10 +171,13 @@
             } catch(e) { console.error("Erreur WebGazer", e); }
         }
 
+        const videoElement = document.querySelector('.input_video');
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
         hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
         
         hands.onResults((results) => {
+            if (renderer.xr.isPresenting) return; // Désactive la peinture pendant la projection AR
+            
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
                 const indexTip = landmarks[8], thumbTip = landmarks[4];
@@ -164,7 +196,7 @@
                 handsTrackingActive = true;
                 document.getElementById('status').innerText = "STATUS: FULL BIO-SYNC (EYES + HANDS)";
                 async function processHandFrame() {
-                    await hands.send({image: videoFeed});
+                    if(!renderer.xr.isPresenting) await hands.send({image: videoFeed});
                     requestAnimationFrame(processHandFrame);
                 }
                 processHandFrame();
@@ -189,7 +221,6 @@
             paintGroup.add(mesh);
         }
 
-        // --- MODULE VOCAL ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition; let isVoiceMode = false;
         
@@ -204,26 +235,16 @@
         if (SpeechRecognition) {
             recognition = new SpeechRecognition();
             recognition.continuous = true; recognition.lang = 'fr-FR'; recognition.interimResults = false;
-            
             recognition.onresult = (event) => {
                 const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
                 let colorChanged = false;
                 
                 for (const [colorName, hexValue] of Object.entries(colorDictionary)) {
-                    if (transcript.includes(colorName)) {
-                        setBrushColor(hexValue, colorName);
-                        colorChanged = true; break;
-                    }
+                    if (transcript.includes(colorName)) { setBrushColor(hexValue, colorName); colorChanged = true; break; }
                 }
                 
-                if (transcript.includes('efface') || transcript.includes('nettoie')) {
-                    document.getElementById('clear-paint-btn').click();
-                    colorChanged = true;
-                }
-                if (transcript.includes('exporte') || transcript.includes('sauvegarde')) {
-                    document.getElementById('export-btn').click();
-                    colorChanged = true;
-                }
+                if (transcript.includes('efface')) { document.getElementById('clear-paint-btn').click(); colorChanged = true; }
+                if (transcript.includes('exporte')) { document.getElementById('export-btn').click(); colorChanged = true; }
 
                 if (!colorChanged && mistralApiKey) askMistral(transcript);
             };
@@ -232,13 +253,8 @@
         document.getElementById('voice-btn').addEventListener('click', function() {
             if (!recognition) return;
             isVoiceMode = !isVoiceMode;
-            if (isVoiceMode) {
-                this.innerText = "[ VOICE LINK : ON ]"; this.style.color = "#ffaa00";
-                try { recognition.start(); } catch(e){}
-            } else {
-                this.innerText = "[ VOICE LINK : OFF ]"; this.style.color = "#00f2ff";
-                recognition.stop();
-            }
+            if (isVoiceMode) { this.innerText = "[ VOICE LINK : ON ]"; this.style.color = "#ffaa00"; try { recognition.start(); } catch(e){} } 
+            else { this.innerText = "[ VOICE LINK : OFF ]"; this.style.color = "#00f2ff"; recognition.stop(); }
         });
 
         document.getElementById('clear-paint-btn').addEventListener('click', () => {
@@ -248,54 +264,31 @@
             }
         });
 
-        // --- EXPORT 3D GLTF ---
         document.getElementById('export-btn').addEventListener('click', () => {
-            if (paintGroup.children.length === 0) {
-                updateTerminalMsg("> SYSTEM: CANVAS IS EMPTY. NOTHING TO EXPORT.");
-                return;
-            }
+            if (paintGroup.children.length === 0) return updateTerminalMsg("> SYSTEM: CANVAS IS EMPTY.");
             updateTerminalMsg("> SYSTEM: INITIATING 3D MESH EXPORT...");
-            
             const exporter = new THREE.GLTFExporter();
             exporter.parse(paintGroup, function (gltf) {
                 const output = JSON.stringify(gltf, null, 2);
                 const blob = new Blob([output], { type: 'text/plain' });
                 const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.style.display = 'none';
-                link.href = url;
-                link.download = 'Niko_Artwork_2026.gltf';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-                
-                updateTerminalMsg("> SYSTEM: ARTWORK SUCCESSFULLY EXPORTED TO REALITY.");
-                if (mistralApiKey) askMistral("Je viens d'exporter ma peinture holographique en fichier 3D. Fais un bref commentaire poétique sur le passage du numérique au monde physique.");
-                
+                const link = document.createElement('a'); link.style.display = 'none'; link.href = url; link.download = 'Niko_Artwork_2026.gltf';
+                document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+                if (mistralApiKey) askMistral("Je viens d'exporter ma peinture holographique. Fais un bref commentaire.");
             }, { binary: false });
         });
 
-        // --- AUTH & MISTRAL ---
         let mistralApiKey = localStorage.getItem('niko_mistral_key') || "";
         const authPanel = document.getElementById('auth-panel'), apiKeyInput = document.getElementById('api-key-input');
         const authBtn = document.getElementById('auth-btn'), chatLog = document.getElementById('chat-log');
-
         function updateTerminalMsg(htmlContent) { chatLog.innerHTML = htmlContent; chatLog.scrollTop = chatLog.scrollHeight; }
 
-        if (mistralApiKey) { 
-            authPanel.style.display = 'none'; 
-            updateTerminalMsg("> MATRICE SECURED. INITIALIZING DUAL-TRACKING..."); 
-            initOptics(); 
-        }
+        if (mistralApiKey) { authPanel.style.display = 'none'; updateTerminalMsg("> MATRICE SECURED."); initOptics(); }
 
         authBtn.addEventListener('click', () => {
             if (apiKeyInput.value.trim()) {
-                mistralApiKey = apiKeyInput.value.trim(); 
-                localStorage.setItem('niko_mistral_key', mistralApiKey);
-                authPanel.style.display = 'none'; 
-                updateTerminalMsg("> MATRICE SECURED. INITIALIZING DUAL-TRACKING...");
-                initOptics();
+                mistralApiKey = apiKeyInput.value.trim(); localStorage.setItem('niko_mistral_key', mistralApiKey);
+                authPanel.style.display = 'none'; updateTerminalMsg("> MATRICE SECURED."); initOptics();
             }
         });
 
@@ -309,29 +302,19 @@
                     body: JSON.stringify({
                         model: "mistral-small-latest",
                         messages: [
-                            {role: "system", content: "Tu es le Symbiote de l'Atelier Neural de l'artiste Niko. Nous sommes en 2026. L'utilisateur peint en 3D dans le vide en utilisant son regard pour faire tourner l'oeuvre et ses mains pour sculpter l'encre. Réponds à ses paroles de manière cybernétique, poétique et extrêmement courte (1 phrase max)."},
+                            {role: "system", content: "Tu es le Symbiote de l'Atelier Neural de l'artiste Niko. Nous sommes en 2026. L'utilisateur peint en 3D dans l'air. Réponds de manière poétique et très courte (1 phrase max)."},
                             {role: "user", content: prompt}
                         ]
                     })
                 });
-                if (!response.ok) {
-                    const errData = await response.json().catch(() => ({}));
-                    throw new Error(`API ${response.status}: ${errData.message || 'Clé invalide.'}`);
-                }
+                if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(`API ${response.status}: ${errData.message || 'Clé invalide.'}`); }
                 const reply = (await response.json()).choices[0].message.content;
                 updateTerminalMsg(`> NIKO: ${prompt}<br>> SYMBIOTE: ${reply}`);
                 if (window.speechSynthesis) {
-                    const u = new SpeechSynthesisUtterance(reply.replace(/[*_~`#]/g, '')); u.lang = 'fr-FR'; u.pitch = 0.8; u.rate = 1.05;
-                    window.speechSynthesis.speak(u);
+                    const u = new SpeechSynthesisUtterance(reply.replace(/[*_~`#]/g, '')); u.lang = 'fr-FR'; u.pitch = 0.8; u.rate = 1.05; window.speechSynthesis.speak(u);
                 }
-            } catch(e) {
-                updateTerminalMsg(`> SYMBIOTE: <span style="color:red;">LINK SEVERED. Reason: ${e.message}</span>`);
-            }
+            } catch(e) { updateTerminalMsg(`> SYMBIOTE: <span style="color:red;">LINK SEVERED. Reason: ${e.message}</span>`); }
         }
-
-        document.getElementById('interaction-layer').addEventListener('mousemove', (e) => {
-            if(!isWebGazerActive) { gazeTarget.x = (e.clientX / window.innerWidth) * 2 - 1; gazeTarget.y = -(e.clientY / window.innerHeight) * 2 + 1; }
-        });
 
         initThree();
     </script>
