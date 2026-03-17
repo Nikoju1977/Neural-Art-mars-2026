@@ -3,49 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NIKO | ATELIER NEURAL V4 - MISTRAL CORE</title>
+    <title>NIKO | ATELIER NEURAL V8 - BIOMETRIC MIRROR</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; touch-action: none; }
-        #hud {
-            position: absolute; top: 20px; left: 20px; color: #00f2ff; pointer-events: auto;
-            border-left: 2px solid #00f2ff; padding-left: 15px; z-index: 10;
-            text-shadow: 0 0 5px rgba(0, 242, 255, 0.5);
-        }
+        #hud { position: absolute; top: 20px; left: 20px; color: #00f2ff; pointer-events: auto; border-left: 2px solid #00f2ff; padding-left: 15px; z-index: 10; text-shadow: 0 0 5px rgba(0, 242, 255, 0.5); }
         .stat { font-size: max(10px, 1vw); margin-bottom: 5px; letter-spacing: 2px; }
-        #fullscreen-btn { cursor: pointer; opacity: 0.8; transition: 0.2s; margin-top: 10px; display: inline-block; }
-        #fullscreen-btn:hover { opacity: 1; text-shadow: 0 0 8px #00f2ff; }
-        #blink-flash {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: white; opacity: 0; pointer-events: none; z-index: 100;
-        }
+        .hud-btn { cursor: pointer; opacity: 0.8; transition: 0.2s; margin-top: 10px; display: inline-block; }
+        .hud-btn:hover { opacity: 1; text-shadow: 0 0 8px #00f2ff; }
+        #blink-flash { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: white; opacity: 0; pointer-events: none; z-index: 100; }
         #interaction-layer { position: absolute; top:0; left:0; width: 100vw; height: 100vh; z-index: 1; }
         
-        /* TERMINAL MISTRAL AI */
-        #ai-terminal {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            width: 80%; max-width: 800px; z-index: 20; pointer-events: auto;
-            background: rgba(0, 15, 20, 0.6); border: 1px solid #00f2ff;
-            box-shadow: 0 0 15px rgba(0, 242, 255, 0.2); border-radius: 4px; padding: 15px;
-            display: flex; flex-direction: column; gap: 10px;
-            backdrop-filter: blur(5px);
-        }
-        #chat-log {
-            color: #00f2ff; font-size: 14px; min-height: 40px; max-height: 150px;
-            overflow-y: auto; text-shadow: 0 0 5px #00f2ff; line-height: 1.4;
-        }
+        #ai-terminal { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 800px; z-index: 20; pointer-events: auto; background: rgba(0, 15, 20, 0.6); border: 1px solid #00f2ff; box-shadow: 0 0 15px rgba(0, 242, 255, 0.2); border-radius: 4px; padding: 15px; display: flex; flex-direction: column; gap: 10px; backdrop-filter: blur(5px); }
+        #chat-log { color: #00f2ff; font-size: 14px; min-height: 40px; max-height: 150px; overflow-y: auto; text-shadow: 0 0 5px #00f2ff; line-height: 1.4; }
         #chat-input-container { display: flex; gap: 10px; border-top: 1px solid rgba(0, 242, 255, 0.3); padding-top: 10px;}
-        #chat-input {
-            background: transparent; border: none; color: #fff; font-family: 'Orbitron', sans-serif;
-            font-size: 14px; flex-grow: 1; outline: none; letter-spacing: 1px;
-        }
+        #chat-input { background: transparent; border: none; color: #fff; font-family: 'Orbitron', sans-serif; font-size: 14px; flex-grow: 1; outline: none; letter-spacing: 1px; }
         #chat-input::placeholder { color: rgba(0, 242, 255, 0.4); }
+
+        #auth-panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 15, 20, 0.85); border: 1px solid #ffaa00; box-shadow: 0 0 30px rgba(255, 170, 0, 0.2); border-radius: 4px; padding: 40px; z-index: 1000; display: flex; flex-direction: column; gap: 20px; text-align: center; backdrop-filter: blur(15px); min-width: 300px; }
+        #auth-panel h2 { color: #ffaa00; margin: 0; font-size: 18px; letter-spacing: 3px; text-shadow: 0 0 10px rgba(255, 170, 0, 0.5); }
+        #api-key-input { background: rgba(0, 0, 0, 0.6); border: 1px solid #00f2ff; color: #00f2ff; padding: 12px; font-family: 'Orbitron', sans-serif; outline: none; text-align: center; letter-spacing: 2px; }
+        #auth-btn { background: #00f2ff; color: #000; border: none; padding: 12px; font-family: 'Orbitron', sans-serif; font-weight: bold; cursor: pointer; transition: 0.3s; letter-spacing: 2px; }
+        #auth-btn:hover { background: #fff; box-shadow: 0 0 20px #00f2ff; }
+        #reset-key-btn { cursor: pointer; font-size: 10px; color: rgba(0, 242, 255, 0.5); margin-top: 5px; display: inline-block;}
+        #reset-key-btn:hover { color: #ffaa00; }
     </style>
 </head>
 <body>
+
+    <div id="auth-panel">
+        <h2>> CORE ENCRYPTED</h2>
+        <div style="color: #00f2ff; font-size: 12px; margin-bottom: 10px;">ENTER MISTRAL API KEY</div>
+        <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off" />
+        <button id="auth-btn">AUTHORIZE</button>
+    </div>
 
     <div id="blink-flash"></div>
     <div id="interaction-layer"></div>
@@ -55,157 +49,232 @@
         <div class="stat" id="status">STATUS: STANDBY (CLICK TO WAKE)</div>
         <div class="stat" id="stress-ui">CORE ALIGNMENT: NOMINAL</div>
         <div class="stat" id="gallery-count">MEMORIES: 0/5</div>
-        <div class="stat" id="fullscreen-btn">[ IMMERSION : OFF ]</div>
+        <div class="stat hud-btn" id="voice-btn">[ VOICE LINK : OFF ]</div><br>
+        <div class="stat hud-btn" id="fullscreen-btn">[ IMMERSION : OFF ]</div><br>
+        <div class="stat" id="reset-key-btn">[ PURGE API KEY ]</div>
     </div>
 
     <div id="ai-terminal">
-        <div id="chat-log">> SYSTEM READY. WAITING FOR DIRECTIVE...</div>
+        <div id="chat-log">> SYSTEM READY. WAITING FOR SECURE LINK...</div>
         <div id="chat-input-container">
             <span style="color: #ffaa00;">></span>
-            <input type="text" id="chat-input" placeholder="ENTER PROMPT FOR MISTRAL CORE..." autocomplete="off"/>
+            <input type="text" id="chat-input" placeholder="PARLE OU TAPE UNE FORME (ex: dessine une croix)..." autocomplete="off"/>
         </div>
     </div>
 
     <script id="vShader" type="x-shader/x-vertex">
-        uniform float uTime;
-        uniform float uStress;
-        uniform float uAudio;
-        varying vec3 vColor;
+        uniform float uTime; uniform float uStress; uniform float uAudio; varying vec3 vColor;
         void main() {
-            vec3 pos = position;
-            float angle = uTime * (0.2 + uStress * 0.5) + length(pos.xz) * 0.05;
-            float s = sin(angle); float c = cos(angle);
-            pos.xz *= mat2(c, -s, s, c);
+            vec3 pos = position; float angle = uTime * (0.2 + uStress * 0.5) + length(pos.xz) * 0.05;
+            float s = sin(angle); float c = cos(angle); pos.xz *= mat2(c, -s, s, c);
             pos.y += sin(uTime + pos.x) * uAudio * 3.0;
-            
-            vec3 colorZen = vec3(0.0, 0.9, 0.8);
-            vec3 colorStress = vec3(1.0, 0.6, 0.1);
-            vColor = mix(colorZen, colorStress, uStress);
-            
+            vColor = mix(vec3(0.0, 0.9, 0.8), vec3(1.0, 0.6, 0.1), uStress);
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
             gl_PointSize = (3.0 + uAudio * 4.0) * (200.0 / -mvPos.z);
             gl_Position = projectionMatrix * mvPos;
         }
     </script>
     <script id="fShader" type="x-shader/x-fragment">
-        varying vec3 vColor;
-        void main() {
-            if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
-            gl_FragColor = vec4(vColor, 0.8);
-        }
+        varying vec3 vColor; void main() { if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard; gl_FragColor = vec4(vColor, 0.8); }
     </script>
 
     <script>
-        // ==========================================
-        // CONFIGURATION MISTRAL AI (À REMPLIR)
-        // Obtenir une clé sur console.mistral.ai
-        // ==========================================
-        const MISTRAL_API_KEY = "TA_CLE_API_MISTRAL_ICI"; 
-        // ==========================================
-
         let scene, camera, renderer, points, material;
         let coreGroup, coreSphere, coreCube, coreMetatron, coreMaterial;
         let audioContext, analyser, dataArray;
-        let stress = 0, gallery = [];
-        let isWebGazerActive = false;
-        let syntheticBreathing = 0;
-        let isThinking = false; // Bloque le stress en haut pendant le calcul AI
+        let stress = 0, gallery = [], holographicConstructs = [];
+        let isWebGazerActive = false, isThinking = false, isSpeaking = false;
         const MAX_GALLERY = 5;
 
-        // --- MISTRAL AI LOGIC ---
-        const chatInput = document.getElementById('chat-input');
-        const chatLog = document.getElementById('chat-log');
-        let typeWriterInterval;
+        // --- MODULE DE MATÉRIALISATION GÉOMÉTRIQUE & BIOMÉTRIQUE ---
+        function spawnShape(type) {
+            let mesh;
+            const colors = [0x00f2ff, 0xffaa00, 0xff0055, 0xbd00ff];
+            const randColor = colors[Math.floor(Math.random() * colors.length)];
+            const wireMat = new THREE.LineBasicMaterial({ color: randColor, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
 
-        chatInput.addEventListener('keypress', function (e) {
+            if (type === 'croix') {
+                const group = new THREE.Group();
+                const vGeo = new THREE.BoxGeometry(8, 25, 8);
+                const hGeo = new THREE.BoxGeometry(25, 8, 8);
+                
+                // Capture du visage via le flux vidéo caché de WebGazer
+                let faceTexture = null;
+                const videoFeed = document.getElementById('webgazerVideoFeed');
+                
+                if (videoFeed && videoFeed.readyState >= 2) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoFeed.videoWidth;
+                    canvas.height = videoFeed.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Miroir horizontal
+                    ctx.translate(canvas.width, 0);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(videoFeed, 0, 0, canvas.width, canvas.height);
+                    
+                    // Application d'un filtre Holographique Cyan sur le visage
+                    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+                    ctx.fillStyle = "rgba(0, 242, 255, 0.3)";
+                    ctx.globalCompositeOperation = "color";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    faceTexture = new THREE.CanvasTexture(canvas);
+                }
+
+                // Matériau solide avec le visage de Niko (ou couleur néon si pas de caméra)
+                const solidMat = new THREE.MeshBasicMaterial({ 
+                    color: faceTexture ? 0xffffff : randColor,
+                    map: faceTexture, 
+                    transparent: true, 
+                    opacity: 0.85, 
+                    blending: THREE.AdditiveBlending 
+                });
+
+                // Arêtes néon pour structurer la croix
+                const edgeMat = new THREE.LineBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 0.9 });
+
+                group.add(new THREE.Mesh(vGeo, solidMat));
+                group.add(new THREE.Mesh(hGeo, solidMat));
+                group.add(new THREE.LineSegments(new THREE.EdgesGeometry(vGeo), edgeMat));
+                group.add(new THREE.LineSegments(new THREE.EdgesGeometry(hGeo), edgeMat));
+                
+                mesh = group;
+                updateTerminalMsg(`> SYSTEM: BIOMETRIC CAPTURE SUCCESSFUL. CONSTRUCTING [CROIX]`);
+            } else {
+                let geo;
+                if (type === 'rond' || type === 'cercle') geo = new THREE.TorusGeometry(12, 0.5, 16, 100);
+                else if (type === 'carré' || type === 'cube') geo = new THREE.BoxGeometry(18, 18, 18);
+                else if (type === 'triangle' || type === 'pyramide') geo = new THREE.TetrahedronGeometry(15);
+                
+                mesh = new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat);
+                updateTerminalMsg(`> SYSTEM: MATERIALIZING NEURAL CONSTRUCT [${type.toUpperCase()}]`);
+            }
+
+            // Positionnement en orbite
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 50 + Math.random() * 30;
+            mesh.position.set(Math.cos(angle) * radius, (Math.random() - 0.5) * 30, Math.sin(angle) * radius);
+            
+            // Animation d'apparition
+            mesh.scale.set(0, 0, 0);
+            scene.add(mesh);
+            holographicConstructs.push(mesh);
+            
+            gsap.to(mesh.scale, {x: 1, y: 1, z: 1, duration: 2.0, ease: "elastic.out(1, 0.3)"});
+        }
+
+        // --- VOCAL AI MODULE (STT & TTS) ---
+        let isVoiceMode = false;
+        const voiceBtn = document.getElementById('voice-btn');
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false; recognition.lang = 'fr-FR'; recognition.interimResults = false;
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById('chat-input').value = transcript;
+                askMistral(transcript);
+            };
+            recognition.onend = () => { if (isVoiceMode && !isThinking && !isSpeaking) { try { recognition.start(); } catch(e){} } };
+        }
+
+        voiceBtn.addEventListener('click', () => {
+            if (!recognition) return updateTerminalMsg("> ERROR: NO SPEECH RECOGNITION SUPPORT.");
+            isVoiceMode = !isVoiceMode;
+            if (isVoiceMode) {
+                voiceBtn.innerText = "[ VOICE LINK : ON ]"; voiceBtn.style.color = "#ffaa00";
+                try { recognition.start(); } catch(e){}
+            } else {
+                voiceBtn.innerText = "[ VOICE LINK : OFF ]"; voiceBtn.style.color = "#00f2ff";
+                recognition.stop();
+            }
+        });
+
+        function aiSpeak(text) {
+            if (!window.speechSynthesis) return;
+            const cleanText = text.replace(/[*_~`#]/g, '');
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.lang = 'fr-FR'; utterance.pitch = 0.8; utterance.rate = 1.1;
+            utterance.onstart = () => { isSpeaking = true; if(isVoiceMode) recognition.stop(); };
+            utterance.onend = () => { isSpeaking = false; if (isVoiceMode && !isThinking) { try { recognition.start(); } catch(e){} } };
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // --- AUTH & TERMINAL ---
+        let mistralApiKey = localStorage.getItem('niko_mistral_key') || "";
+        const authPanel = document.getElementById('auth-panel'), apiKeyInput = document.getElementById('api-key-input');
+        const authBtn = document.getElementById('auth-btn'), chatLog = document.getElementById('chat-log');
+
+        function updateTerminalMsg(htmlContent) { chatLog.innerHTML = htmlContent; chatLog.scrollTop = chatLog.scrollHeight; }
+
+        if (mistralApiKey) { authPanel.style.display = 'none'; updateTerminalMsg("> SECURE LINK ESTABLISHED. CORE MISTRAL ONLINE."); }
+
+        authBtn.addEventListener('click', () => {
+            if (apiKeyInput.value.trim()) {
+                mistralApiKey = apiKeyInput.value.trim(); localStorage.setItem('niko_mistral_key', mistralApiKey);
+                authPanel.style.display = 'none'; updateTerminalMsg("> AUTHORIZATION GRANTED.");
+            }
+        });
+        document.getElementById('reset-key-btn').addEventListener('click', () => {
+            localStorage.removeItem('niko_mistral_key'); mistralApiKey = ""; authPanel.style.display = 'flex';
+        });
+
+        document.getElementById('chat-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter' && this.value.trim() !== '') {
-                const prompt = this.value;
-                this.value = '';
-                askMistral(prompt);
+                if (!mistralApiKey) return authPanel.style.display = 'flex';
+                askMistral(this.value); this.value = '';
             }
         });
 
         async function askMistral(prompt) {
-            if (MISTRAL_API_KEY === "TA_CLE_API_MISTRAL_ICI") {
-                typeWriter("> ERROR: MISTRAL API KEY MISSING. PLEASE CONFIGURE IN SOURCE CODE.");
-                return;
-            }
+            isThinking = true; stress = 0.9;
+            updateTerminalMsg(`> NIKO: ${prompt}<br>> MISTRAL: <span style="color:#ffaa00;">PROCESSING...</span>`);
+            if (isVoiceMode) recognition.stop();
 
-            // Déclenchement de l'état "THINKING" (Le vortex s'emballe et devient Ambre)
-            isThinking = true;
-            stress = 0.9;
-            document.getElementById('status').innerText = "STATUS: COGNITIVE PROCESSING...";
-            chatLog.innerHTML = `> NIKO: ${prompt}<br>> MISTRAL: <span style="color:#ffaa00;">PROCESSING NEURAL PATHWAYS...</span>`;
+            // L'ANALYSEUR D'INTENTION (Détection des formes de Niko)
+            const lowPrompt = prompt.toLowerCase();
+            if (lowPrompt.includes('rond') || lowPrompt.includes('cercle')) spawnShape('cercle');
+            if (lowPrompt.includes('carré') || lowPrompt.includes('cube')) spawnShape('cube');
+            if (lowPrompt.includes('croix')) spawnShape('croix');
+            if (lowPrompt.includes('triangle') || lowPrompt.includes('pyramide')) spawnShape('triangle');
 
             try {
                 const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${MISTRAL_API_KEY}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${mistralApiKey}` },
                     body: JSON.stringify({
                         model: "mistral-small-latest",
                         messages: [
-                            {role: "system", content: "Tu es le Core Mistral, l'intelligence artificielle intégrée dans l'Atelier Neural de l'artiste Niko (nous sommes en 2026). Tu réponds de manière concise, technologique et légèrement futuriste. Limite tes réponses à 3-4 phrases maximum pour un affichage sur terminal holographique."},
+                            {role: "system", content: "Tu es le Core Mistral, l'IA de l'Atelier Neural de Niko. Si l'utilisateur te demande de dessiner une forme, confirme la matérialisation. Si c'est une croix, confirme que tu as capturé son visage en temps réel pour l'intégrer à l'œuvre. Reste très concis."},
                             {role: "user", content: prompt}
                         ]
                     })
                 });
-
-                if (!response.ok) throw new Error("API Connection Failed");
-
-                const data = await response.json();
-                const reply = data.choices[0].message.content;
-                typeWriter(`> NIKO: ${prompt}<br>> MISTRAL: ${reply}`);
-
+                if (!response.ok) throw new Error("API FAILED");
+                const reply = (await response.json()).choices[0].message.content;
+                updateTerminalMsg(`> NIKO: ${prompt}<br>> MISTRAL: ${reply}`);
+                aiSpeak(reply);
             } catch(e) {
-                console.error(e);
-                typeWriter(`> NIKO: ${prompt}<br>> MISTRAL: <span style="color:red;">SYSTEM FAILURE. UNABLE TO REACH CORE.</span>`);
-            } finally {
-                // Retour au calme
-                isThinking = false;
-                document.getElementById('status').innerText = "STATUS: NEURAL LINK ACTIVE";
-            }
+                updateTerminalMsg(`> NIKO: ${prompt}<br>> MISTRAL: <span style="color:red;">SYSTEM FAILURE.</span>`);
+            } finally { isThinking = false; }
         }
 
-        function typeWriter(htmlContent) {
-            clearInterval(typeWriterInterval);
-            chatLog.innerHTML = "";
-            let i = 0;
-            // Astuce pour gérer les balises HTML dans le typewriter
-            let tempDiv = document.createElement("div");
-            tempDiv.innerHTML = htmlContent;
-            let textArray = tempDiv.childNodes;
-            
-            chatLog.innerHTML = htmlContent; // Pour ce prototype FUI, on affiche direct pour garder le style HTML propre, on pourrait complexifier le typewriter plus tard.
-            chatLog.scrollTop = chatLog.scrollHeight;
-        }
-
-        // --- GESTION DU PLEIN ÉCRAN ---
-        const fullscreenBtn = document.getElementById('fullscreen-btn');
-        fullscreenBtn.addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen();
-                fullscreenBtn.innerText = "[ IMMERSION : ON ]";
-            } else if (document.exitFullscreen) {
-                document.exitFullscreen();
-                fullscreenBtn.innerText = "[ IMMERSION : OFF ]";
-            }
+        // --- FULLSCREEN & INITIALISATION ---
+        document.getElementById('fullscreen-btn').addEventListener('click', function() {
+            if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); this.innerText = "[ IMMERSION : ON ]"; }
+            else { document.exitFullscreen(); this.innerText = "[ IMMERSION : OFF ]"; }
         });
 
-        // --- INITIALISATION THREE.JS ---
         function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            document.body.appendChild(renderer.domElement);
+            renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
 
-            // 1. LE VORTEX
-            const geo = new THREE.BufferGeometry();
-            const pos = new Float32Array(12000 * 3);
+            const geo = new THREE.BufferGeometry(); const pos = new Float32Array(36000);
             for(let i=0; i<36000; i++) pos[i] = (Math.random()-0.5) * 120;
             geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 
@@ -215,171 +284,87 @@
                 fragmentShader: document.getElementById('fShader').textContent,
                 transparent: true, blending: THREE.AdditiveBlending, depthTest: false
             });
-            points = new THREE.Points(geo, material);
-            scene.add(points);
+            points = new THREE.Points(geo, material); scene.add(points);
 
-            // 2. LE NOYAU QUANTIQUE
             coreGroup = new THREE.Group();
             coreMaterial = new THREE.LineBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+            coreSphere = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.SphereGeometry(8, 12, 12)), coreMaterial);
+            coreCube = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(15, 15, 15)), coreMaterial);
+            coreMetatron = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(22, 1)), coreMaterial);
+            coreGroup.add(coreSphere, coreCube, coreMetatron); scene.add(coreGroup);
 
-            const sphereGeo = new THREE.EdgesGeometry(new THREE.SphereGeometry(8, 12, 12));
-            coreSphere = new THREE.LineSegments(sphereGeo, coreMaterial);
-            coreGroup.add(coreSphere);
-
-            const cubeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(15, 15, 15));
-            coreCube = new THREE.LineSegments(cubeGeo, coreMaterial);
-            coreGroup.add(coreCube);
-
-            const metaGeo = new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(22, 1));
-            coreMetatron = new THREE.LineSegments(metaGeo, coreMaterial);
-            coreGroup.add(coreMetatron);
-
-            scene.add(coreGroup);
             camera.position.z = window.innerWidth < 768 ? 140 : 100;
 
-            // Capteurs de regard
-            try {
-                webgazer.setGazeListener((data) => {
-                    if (!data) { handleBlink(); return; }
-                    isWebGazerActive = true;
-                    updateRotation(data.x, data.y);
-                }).begin();
-                webgazer.showVideoPreview(false).showPredictionPoints(false);
-            } catch(e) {}
-
+            try { webgazer.setGazeListener((data) => { if (!data) { handleBlink(); return; } isWebGazerActive = true; updateRotation(data.x, data.y); }).begin(); webgazer.showVideoPreview(false).showPredictionPoints(false); } catch(e) {}
             const interact = document.getElementById('interaction-layer');
             interact.addEventListener('mousemove', (e) => { if(!isWebGazerActive) updateRotation(e.clientX, e.clientY); });
-            interact.addEventListener('touchmove', (e) => { if(!isWebGazerActive) updateRotation(e.touches[0].clientX, e.touches[0].clientY); }, {passive: true});
             interact.addEventListener('dblclick', handleBlink);
-            let lastTap = 0;
-            interact.addEventListener('touchstart', (e) => {
-                let curr = new Date().getTime();
-                if (curr - lastTap < 500 && curr - lastTap > 0) { handleBlink(); e.preventDefault(); }
-                lastTap = curr;
-            });
 
-            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
             animate();
         }
 
         function updateRotation(x, y) {
-            const normX = (x / window.innerWidth) * 2 - 1;
-            const normY = -(y / window.innerHeight) * 2 + 1;
-            gsap.to(points.rotation, { x: normY * 0.3, y: normX * 0.3, duration: 1.0 });
-            gsap.to(coreGroup.rotation, { x: normY * -0.2, y: normX * -0.2, duration: 1.5 });
+            const nX = (x / window.innerWidth) * 2 - 1, nY = -(y / window.innerHeight) * 2 + 1;
+            gsap.to(points.rotation, { x: nY * 0.3, y: nX * 0.3, duration: 1.0 });
+            gsap.to(coreGroup.rotation, { x: nY * -0.2, y: nX * -0.2, duration: 1.5 });
         }
 
         async function initSensors() {
-            if (audioContext) return; // Évite les relances multiples
-            document.getElementById('status').innerText = "STATUS: INITIALIZING...";
+            if (audioContext) return;
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                audioContext.createMediaStreamSource(stream).connect(analyser);
+                analyser = audioContext.createAnalyser(); audioContext.createMediaStreamSource(stream).connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
-                document.getElementById('status').innerText = "STATUS: NEURAL LINK ACTIVE";
-            } catch(err) {
-                document.getElementById('status').innerText = "STATUS: BASIC MODE (MIC DENIED)";
-            }
+            } catch(err) {}
         }
 
         function handleBlink() {
             if(gallery.length >= MAX_GALLERY) return;
             gsap.to("#blink-flash", { opacity: 1, duration: 0.05, yoyo: true, repeat: 1 });
-            
-            const originalImgData = renderer.domElement.toDataURL("image/png");
-            const tempCanvas = document.createElement('canvas');
-            const ctx = tempCanvas.getContext('2d');
-            const img = new Image();
-
-            img.onload = function() {
-                tempCanvas.width = img.width; tempCanvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-                
-                ctx.font = 'bold 24px Orbitron, sans-serif'; 
-                ctx.fillStyle = stress > 0.5 ? '#ffaa00' : '#00f2ff';
-                ctx.textAlign = 'right';
-                ctx.shadowColor = ctx.fillStyle;
-                ctx.shadowBlur = 10;
+            const img = new Image(); img.onload = function() {
+                const tempC = document.createElement('canvas'), ctx = tempC.getContext('2d');
+                tempC.width = img.width; tempC.height = img.height; ctx.drawImage(img, 0, 0);
+                ctx.font = 'bold 24px Orbitron'; ctx.fillStyle = stress > 0.5 ? '#ffaa00' : '#00f2ff'; ctx.textAlign = 'right'; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10;
                 ctx.fillText('Niko 2026', img.width - 40, img.height - 40);
-
-                const plane = new THREE.Mesh(
-                    new THREE.PlaneGeometry(18, 12),
-                    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(tempCanvas), transparent: true, opacity: 0.8, side: THREE.DoubleSide })
-                );
-
+                const plane = new THREE.Mesh(new THREE.PlaneGeometry(18, 12), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(tempC), transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
                 const angle = (gallery.length / MAX_GALLERY) * Math.PI * 2;
-                plane.position.set(Math.cos(angle)*70, Math.sin(angle)*30, Math.sin(angle)*70);
-                plane.lookAt(0,0,0);
-                scene.add(plane);
-                gallery.push(plane);
-                document.getElementById('gallery-count').innerText = `MEMORIES: ${gallery.length}/5`;
-            };
-            img.src = originalImgData;
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+                plane.position.set(Math.cos(angle)*70, Math.sin(angle)*30, Math.sin(angle)*70); plane.lookAt(0,0,0);
+                scene.add(plane); gallery.push(plane); document.getElementById('gallery-count').innerText = `MEMORIES: ${gallery.length}/5`;
+            }; img.src = renderer.domElement.toDataURL("image/png");
         }
 
         function animate(t) {
-            requestAnimationFrame(animate);
-            let time = t * 0.001;
-            material.uniforms.uTime.value = time;
+            requestAnimationFrame(animate); let time = t * 0.001; material.uniforms.uTime.value = time;
             
-            // Si l'IA réfléchit, on force le stress visuel
-            if (isThinking) {
-                stress = 0.9;
-                material.uniforms.uAudio.value = Math.sin(time * 10.0) * 0.5 + 0.5; // Battement cardiaque rapide
+            if (isThinking || isSpeaking) {
+                stress = isThinking ? 0.9 : 0.5; material.uniforms.uAudio.value = Math.sin(time * (isSpeaking ? 15.0 : 10.0)) * 0.6 + 0.4; 
             } else if (analyser && dataArray) {
-                analyser.getByteFrequencyData(dataArray);
-                let vol = dataArray.reduce((a,b) => a+b) / dataArray.length;
-                material.uniforms.uAudio.value = vol / 20;
-                stress = Math.min(1, vol / 50);
+                analyser.getByteFrequencyData(dataArray); let vol = dataArray.reduce((a,b) => a+b) / dataArray.length;
+                material.uniforms.uAudio.value = vol / 20; stress = Math.min(1, vol / 50);
             } else {
-                syntheticBreathing = Math.sin(time * 2.0) * 0.5 + 0.5;
-                material.uniforms.uAudio.value = syntheticBreathing * 1.5;
-                stress = syntheticBreathing * 0.4; 
+                let br = Math.sin(time * 2.0) * 0.5 + 0.5; material.uniforms.uAudio.value = br * 1.5; stress = br * 0.4; 
             }
 
-            material.uniforms.uStress.value = stress;
-            document.getElementById('stress-ui').innerText = `CORE ALIGNMENT: ${100 - Math.floor(stress*100)}%`;
+            let speed = isThinking ? 3.0 : (isSpeaking ? 1.5 : 1.0); 
+            coreSphere.rotation.set(time * 0.3 * speed, time * 0.5 * speed, 0);
+            coreCube.rotation.set(time * -0.2 * speed, 0, time * 0.4 * speed);
+            coreMetatron.rotation.set(0, time * 0.1 * speed, time * -0.15 * speed);
+            coreGroup.scale.setScalar(1.0 + material.uniforms.uAudio.value * 0.5);
+            coreMaterial.color.lerpColors(new THREE.Color(0x00f2ff), new THREE.Color(0xffaa00), stress);
 
-            // Rotation asynchrone des couches
-            let speedMultiplier = isThinking ? 3.0 : 1.0; // Le cube tourne plus vite si Mistral calcule
-            coreSphere.rotation.y = time * 0.5 * speedMultiplier;
-            coreSphere.rotation.x = time * 0.3 * speedMultiplier;
-            
-            coreCube.rotation.x = time * -0.2 * speedMultiplier;
-            coreCube.rotation.z = time * 0.4 * speedMultiplier;
-            
-            coreMetatron.rotation.y = time * 0.1 * speedMultiplier;
-            coreMetatron.rotation.z = time * -0.15 * speedMultiplier;
-
-            let pulse = 1.0 + material.uniforms.uAudio.value * 0.5;
-            coreGroup.scale.set(pulse, pulse, pulse);
-
-            const colorZen = new THREE.Color(0x00f2ff);
-            const colorStress = new THREE.Color(0xffaa00);
-            coreMaterial.color.lerpColors(colorZen, colorStress, stress);
-
-            gallery.forEach((mesh, i) => {
-                mesh.position.y += Math.sin(time + i) * 0.05;
-                mesh.rotation.y += 0.005;
+            // Animer les œuvres générées
+            holographicConstructs.forEach((mesh, i) => {
+                mesh.rotation.x += 0.01; mesh.rotation.y += 0.02;
+                mesh.position.y += Math.sin(time * 2.0 + i) * 0.1;
             });
 
+            gallery.forEach((mesh, i) => { mesh.position.y += Math.sin(time + i) * 0.05; mesh.rotation.y += 0.005; });
             renderer.render(scene, camera);
         }
 
-        // On sépare l'initialisation de l'audio de celle du clic pour pouvoir taper dans le chat
-        document.getElementById('interaction-layer').addEventListener('click', () => { 
-            initSensors(); 
-        }, {once: true});
-        
-        window.onload = init;
+        document.getElementById('interaction-layer').addEventListener('click', () => { initSensors(); }, {once: true}); window.onload = init;
     </script>
 </body>
 </html>
