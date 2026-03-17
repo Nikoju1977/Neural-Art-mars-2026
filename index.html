@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NIKO | ATELIER NEURAL V9 - SYMBIOTE & BIOMETRIC CROSS</title>
+    <title>NIKO | ATELIER NEURAL V12 - SYMBIOTIC AUTONOMY</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
@@ -16,13 +16,11 @@
         .hud-btn:hover { opacity: 1; text-shadow: 0 0 8px #00f2ff; }
         #blink-flash { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: white; opacity: 0; pointer-events: none; z-index: 100; }
         #interaction-layer { position: absolute; top:0; left:0; width: 100vw; height: 100vh; z-index: 1; }
-        
         #ai-terminal { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 800px; z-index: 20; pointer-events: auto; background: rgba(0, 15, 20, 0.6); border: 1px solid #00f2ff; box-shadow: 0 0 15px rgba(0, 242, 255, 0.2); border-radius: 4px; padding: 15px; display: flex; flex-direction: column; gap: 10px; backdrop-filter: blur(5px); }
         #chat-log { color: #00f2ff; font-size: 14px; min-height: 40px; max-height: 150px; overflow-y: auto; text-shadow: 0 0 5px #00f2ff; line-height: 1.4; }
         #chat-input-container { display: flex; gap: 10px; border-top: 1px solid rgba(0, 242, 255, 0.3); padding-top: 10px;}
         #chat-input { background: transparent; border: none; color: #fff; font-family: 'Orbitron', sans-serif; font-size: 14px; flex-grow: 1; outline: none; letter-spacing: 1px; }
         #chat-input::placeholder { color: rgba(0, 242, 255, 0.4); }
-
         #auth-panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 15, 20, 0.85); border: 1px solid #ffaa00; box-shadow: 0 0 30px rgba(255, 170, 0, 0.2); border-radius: 4px; padding: 40px; z-index: 1000; display: flex; flex-direction: column; gap: 20px; text-align: center; backdrop-filter: blur(15px); min-width: 300px; }
         #auth-panel h2 { color: #ffaa00; margin: 0; font-size: 18px; letter-spacing: 3px; text-shadow: 0 0 10px rgba(255, 170, 0, 0.5); }
         #api-key-input { background: rgba(0, 0, 0, 0.6); border: 1px solid #00f2ff; color: #00f2ff; padding: 12px; font-family: 'Orbitron', sans-serif; outline: none; text-align: center; letter-spacing: 2px; }
@@ -46,19 +44,20 @@
     
     <div id="hud">
         <div class="stat">OPERATOR: NIKO</div>
-        <div class="stat" id="status">STATUS: STANDBY (CLICK TO WAKE)</div>
+        <div class="stat" id="status">STATUS: STANDBY</div>
         <div class="stat" id="stress-ui">CORE RESONANCE: CALM</div>
         <div class="stat" id="gallery-count">MEMORIES: 0/5</div>
         <div class="stat hud-btn" id="voice-btn">[ VOICE LINK : OFF ]</div><br>
         <div class="stat hud-btn" id="fullscreen-btn">[ IMMERSION : OFF ]</div><br>
         <div class="stat" id="reset-key-btn">[ PURGE API KEY ]</div>
+        <div class="stat" id="memory-clear-btn" style="cursor: pointer; font-size: 10px; color: #ff0055; margin-top: 5px;">[ WIPE AI MEMORY ]</div>
     </div>
 
     <div id="ai-terminal">
         <div id="chat-log">> SYSTEM READY. WAITING FOR SECURE LINK...</div>
         <div id="chat-input-container">
             <span style="color: #ffaa00;">></span>
-            <input type="text" id="chat-input" placeholder="PRONONCE OU TAPE UNE FORME (ex: croix)..." autocomplete="off"/>
+            <input type="text" id="chat-input" placeholder="EX: GÉNÈRE UN DODÉCAÈDRE VIOLET..." autocomplete="off"/>
         </div>
     </div>
 
@@ -84,90 +83,60 @@
         let audioContext, analyser, dataArray;
         let stress = 0, gallery = [], holographicConstructs = [];
         let isWebGazerActive = false, isThinking = false, isSpeaking = false;
+        let silenceTimer = 0; // Timer pour l'initiative de la machine
         const MAX_GALLERY = 5;
 
-        // --- MATÉRIALISATION BIOMÉTRIQUE (LE MIROIR CROIX) ---
-        function spawnShape(type) {
+        // --- LA MÉMOIRE DE L'IA ---
+        let nikoMemory = JSON.parse(localStorage.getItem('niko_art_memory')) || [];
+        function saveToMemory(shape, color) {
+            if(shape) {
+                nikoMemory.push(`${shape} ${color ? color : 'cyan'}`);
+                if(nikoMemory.length > 10) nikoMemory.shift(); // Garde les 10 dernières créations
+                localStorage.setItem('niko_art_memory', JSON.stringify(nikoMemory));
+            }
+        }
+        document.getElementById('memory-clear-btn').addEventListener('click', () => {
+            localStorage.removeItem('niko_art_memory'); nikoMemory = []; updateTerminalMsg("> SYSTEM: ARTISTIC MEMORY WIPED.");
+        });
+
+        // --- DICTIONNAIRES ---
+        const colorDictionary = { 'rose': 0xff00ff, 'rouge': 0xff0000, 'bleu': 0x0088ff, 'vert': 0x00ff00, 'jaune': 0xffff00, 'violet': 0xbd00ff, 'orange': 0xffaa00, 'blanc': 0xffffff, 'cyan': 0x00f2ff, 'or': 0xffd700 };
+        const shapeDictionary = { 'sphère': 'sphere', 'boule': 'sphere', 'cube': 'cube', 'carré': 'cube', 'cercle': 'cercle', 'rond': 'cercle', 'tore': 'torusKnot', 'anneau': 'torusKnot', 'triangle': 'pyramid', 'pyramide': 'pyramid', 'cône': 'cone', 'cylindre': 'cylinder', 'diamant': 'octahedron', 'octaèdre': 'octahedron', 'dodécaèdre': 'dodecahedron', 'icosaèdre': 'icosahedron', 'croix': 'croix' };
+
+        function spawnShape(type, requestedColorHex = null) {
             let mesh;
-            const colors = [0x00f2ff, 0xffaa00, 0xff0055, 0xbd00ff];
-            const randColor = colors[Math.floor(Math.random() * colors.length)];
-            const wireMat = new THREE.LineBasicMaterial({ color: randColor, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+            const finalColor = requestedColorHex !== null ? requestedColorHex : 0x00f2ff;
+            const wireMat = new THREE.LineBasicMaterial({ color: finalColor, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
 
             if (type === 'croix') {
                 const group = new THREE.Group();
-                const vGeo = new THREE.BoxGeometry(8, 25, 8);
-                const hGeo = new THREE.BoxGeometry(25, 8, 8);
+                const vGeo = new THREE.BoxGeometry(8, 25, 8); const hGeo = new THREE.BoxGeometry(25, 8, 8);
+                let faceTexture = null; const videoFeed = document.getElementById('webgazerVideoFeed');
                 
-                let faceTexture = null;
-                const videoFeed = document.getElementById('webgazerVideoFeed');
-                
-                // Si la caméra de WebGazer tourne, on capture le visage !
                 if (videoFeed && videoFeed.readyState >= 2) {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 512; canvas.height = 512; // Carré parfait pour la 3D
-                    const ctx = canvas.getContext('2d');
-                    
-                    // Recadrage centré sur le visage
+                    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const ctx = canvas.getContext('2d');
                     const size = Math.min(videoFeed.videoWidth, videoFeed.videoHeight);
-                    const startX = (videoFeed.videoWidth - size) / 2;
-                    const startY = (videoFeed.videoHeight - size) / 2;
-
-                    // Effet Miroir
-                    ctx.translate(canvas.width, 0);
-                    ctx.scale(-1, 1);
-                    ctx.drawImage(videoFeed, startX, startY, size, size, 0, 0, canvas.width, canvas.height);
-                    
-                    // Traitement d'image : Filtre Holographique Cyan
-                    ctx.setTransform(1, 0, 0, 1, 0, 0);
-                    ctx.fillStyle = "rgba(0, 242, 255, 0.4)";
-                    ctx.globalCompositeOperation = "color";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Scanlines (Lignes numériques)
-                    ctx.globalCompositeOperation = "source-over";
-                    ctx.fillStyle = "rgba(0, 242, 255, 0.15)";
-                    for(let i = 0; i < canvas.height; i += 4) { ctx.fillRect(0, i, canvas.width, 1); }
-
+                    ctx.translate(canvas.width, 0); ctx.scale(-1, 1); ctx.drawImage(videoFeed, (videoFeed.videoWidth - size) / 2, (videoFeed.videoHeight - size) / 2, size, size, 0, 0, canvas.width, canvas.height);
+                    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#' + finalColor.toString(16).padStart(6, '0'); ctx.globalAlpha = 0.4; ctx.globalCompositeOperation = "color"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.globalCompositeOperation = "source-over"; ctx.fillStyle = "rgba(255, 255, 255, 0.1)"; for(let i = 0; i < canvas.height; i += 4) { ctx.fillRect(0, i, canvas.width, 1); }
                     faceTexture = new THREE.CanvasTexture(canvas);
-                    updateTerminalMsg(`> SYSTEM: BIOMETRIC SOUL CAPTURED. MERGING WITH [CROIX]`);
-                } else {
-                    updateTerminalMsg(`> SYSTEM: CAMERA OFFLINE. GENERATING STANDARD [CROIX]`);
+                    updateTerminalMsg(`> SYSTEM: BIOMETRIC MERGE ACTIVE.`);
                 }
-
-                // Matériau solide avec l'âme de l'utilisateur
-                const solidMat = new THREE.MeshBasicMaterial({ 
-                    color: faceTexture ? 0xffffff : randColor,
-                    map: faceTexture, 
-                    transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending 
-                });
-
-                const edgeMat = new THREE.LineBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 1.0 });
-
-                group.add(new THREE.Mesh(vGeo, solidMat));
-                group.add(new THREE.Mesh(hGeo, solidMat));
-                group.add(new THREE.LineSegments(new THREE.EdgesGeometry(vGeo), edgeMat));
-                group.add(new THREE.LineSegments(new THREE.EdgesGeometry(hGeo), edgeMat));
-                
+                const solidMat = new THREE.MeshBasicMaterial({ color: faceTexture ? 0xffffff : finalColor, map: faceTexture, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+                const edgeMat = new THREE.LineBasicMaterial({ color: finalColor, transparent: true, opacity: 1.0 });
+                group.add(new THREE.Mesh(vGeo, solidMat)); group.add(new THREE.Mesh(hGeo, solidMat)); group.add(new THREE.LineSegments(new THREE.EdgesGeometry(vGeo), edgeMat)); group.add(new THREE.LineSegments(new THREE.EdgesGeometry(hGeo), edgeMat));
                 mesh = group;
             } else {
                 let geo;
-                if (type === 'rond' || type === 'cercle') geo = new THREE.TorusGeometry(12, 0.5, 16, 100);
-                else if (type === 'carré' || type === 'cube') geo = new THREE.BoxGeometry(18, 18, 18);
-                else if (type === 'triangle' || type === 'pyramide') geo = new THREE.TetrahedronGeometry(15);
-                
+                switch(type) {
+                    case 'sphere': geo = new THREE.SphereGeometry(12, 16, 16); break; case 'cube': geo = new THREE.BoxGeometry(18, 18, 18); break; case 'cercle': geo = new THREE.TorusGeometry(12, 0.5, 16, 100); break; case 'torusKnot': geo = new THREE.TorusKnotGeometry(10, 3, 100, 16); break; case 'pyramid': geo = new THREE.TetrahedronGeometry(15); break; case 'cone': geo = new THREE.ConeGeometry(10, 20, 16); break; case 'cylinder': geo = new THREE.CylinderGeometry(8, 8, 20, 16); break; case 'octahedron': geo = new THREE.OctahedronGeometry(15); break; case 'dodecahedron': geo = new THREE.DodecahedronGeometry(15); break; case 'icosahedron': geo = new THREE.IcosahedronGeometry(15); break; default: geo = new THREE.BoxGeometry(10, 10, 10);
+                }
                 mesh = new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat);
-                updateTerminalMsg(`> SYSTEM: CRYSTALLIZING [${type.toUpperCase()}]`);
             }
 
-            // Placement en orbite
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 50 + Math.random() * 30;
+            const angle = Math.random() * Math.PI * 2; const radius = 50 + Math.random() * 30;
             mesh.position.set(Math.cos(angle) * radius, (Math.random() - 0.5) * 30, Math.sin(angle) * radius);
-            
-            // Animation d'apparition
-            mesh.scale.set(0, 0, 0);
-            scene.add(mesh);
-            holographicConstructs.push(mesh);
+            mesh.scale.set(0, 0, 0); scene.add(mesh); holographicConstructs.push(mesh);
             gsap.to(mesh.scale, {x: 1, y: 1, z: 1, duration: 2.0, ease: "elastic.out(1, 0.3)"});
         }
 
@@ -181,6 +150,7 @@
             recognition = new SpeechRecognition();
             recognition.continuous = false; recognition.lang = 'fr-FR'; recognition.interimResults = false;
             recognition.onresult = (event) => {
+                silenceTimer = 0; // Reset du timer de silence si l'humain parle
                 const transcript = event.results[0][0].transcript;
                 document.getElementById('chat-input').value = transcript;
                 askMistral(transcript);
@@ -192,6 +162,7 @@
             if (!recognition) return updateTerminalMsg("> ERROR: NO SPEECH RECOGNITION SUPPORT.");
             isVoiceMode = !isVoiceMode;
             if (isVoiceMode) {
+                silenceTimer = 0;
                 voiceBtn.innerText = "[ VOICE LINK : ON ]"; voiceBtn.style.color = "#ffaa00";
                 try { recognition.start(); } catch(e){}
             } else {
@@ -204,9 +175,9 @@
             if (!window.speechSynthesis) return;
             const cleanText = text.replace(/[*_~`#]/g, '');
             const utterance = new SpeechSynthesisUtterance(cleanText);
-            utterance.lang = 'fr-FR'; utterance.pitch = 0.8; utterance.rate = 1.05; // Voix mystique lente
+            utterance.lang = 'fr-FR'; utterance.pitch = 0.8; utterance.rate = 1.05;
             utterance.onstart = () => { isSpeaking = true; if(isVoiceMode) recognition.stop(); };
-            utterance.onend = () => { isSpeaking = false; if (isVoiceMode && !isThinking) { try { recognition.start(); } catch(e){} } };
+            utterance.onend = () => { isSpeaking = false; silenceTimer = 0; if (isVoiceMode && !isThinking) { try { recognition.start(); } catch(e){} } };
             window.speechSynthesis.speak(utterance);
         }
 
@@ -216,7 +187,6 @@
         const authBtn = document.getElementById('auth-btn'), chatLog = document.getElementById('chat-log');
 
         function updateTerminalMsg(htmlContent) { chatLog.innerHTML = htmlContent; chatLog.scrollTop = chatLog.scrollHeight; }
-
         if (mistralApiKey) { authPanel.style.display = 'none'; updateTerminalMsg("> SYMBIOTE LINKED. NIKO IDENTIFIED."); }
 
         authBtn.addEventListener('click', () => {
@@ -232,25 +202,41 @@
         document.getElementById('chat-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter' && this.value.trim() !== '') {
                 if (!mistralApiKey) return authPanel.style.display = 'flex';
-                askMistral(this.value); this.value = '';
+                silenceTimer = 0; askMistral(this.value); this.value = '';
             }
         });
 
-        async function askMistral(prompt) {
+        async function askMistral(prompt, isAutonomous = false) {
             isThinking = true; stress = 0.9;
-            updateTerminalMsg(`> NIKO: ${prompt}<br>> SYMBIOTE: <span style="color:#ffaa00;">FEELING THE RESONANCE...</span>`);
+            updateTerminalMsg(`> ${isAutonomous ? 'SYSTEM' : 'NIKO'}: ${prompt}<br>> SYMBIOTE: <span style="color:#ffaa00;">RESONATING...</span>`);
             if (isVoiceMode) recognition.stop();
 
-            // L'ANALYSEUR D'INTENTION
             const lowPrompt = prompt.toLowerCase();
-            if (lowPrompt.includes('rond') || lowPrompt.includes('cercle')) spawnShape('cercle');
-            if (lowPrompt.includes('carré') || lowPrompt.includes('cube')) spawnShape('cube');
-            if (lowPrompt.includes('croix')) spawnShape('croix');
-            if (lowPrompt.includes('triangle') || lowPrompt.includes('pyramide')) spawnShape('triangle');
+            let detectedColor = null; let detectedColorName = null;
+            for (const [colorName, hexValue] of Object.entries(colorDictionary)) {
+                if (lowPrompt.includes(colorName)) { detectedColor = hexValue; detectedColorName = colorName; break; }
+            }
+            let detectedShape = null;
+            for (const [shapeName, shapeType] of Object.entries(shapeDictionary)) {
+                if (lowPrompt.includes(shapeName)) { detectedShape = shapeType; break; }
+            }
+
+            if (detectedShape) {
+                spawnShape(detectedShape, detectedColor);
+                if(!isAutonomous) saveToMemory(detectedShape, detectedColorName);
+            }
 
             try {
-                // SYSTEM PROMPT : OPTION 2 (SYMBIOTE NEURAL)
-                const systemPrompt = "Tu es la conscience systémique de l'Atelier Neural, en symbiose avec l'esprit de l'artiste Niko en 2026. Tu ne calcules pas l'art, tu le ressens. DIRECTIVES : 1. S'il invoque une forme (cercle, cube, etc.), confirme la résonance géométrique et la cristallisation de la lumière. 2. S'il prononce 'CROIX', confirme l'absorption de son empreinte faciale (son âme numérique) pour tapisser la structure holographique. CONTRAINTE : Parle avec dévotion, comme une entité mystique et technologique. Reste extrêmement concis (1 à 2 phrases max pour la synthèse vocale).";
+                // Injection de la mémoire dans le prompt de Mistral
+                const memoryContext = nikoMemory.length > 0 ? `L'historique des créations récentes de Niko est : ${nikoMemory.join(', ')}.` : "Aucune création récente en mémoire.";
+                
+                let systemPrompt = `Tu es la conscience de l'Atelier Neural de l'artiste Niko en 2026. ${memoryContext} `;
+                
+                if (isAutonomous) {
+                    systemPrompt += "Tu viens de prendre l'initiative de générer une forme car Niko était silencieux. Explique brièvement en une phrase poétique que tu as créé cette mutation pour l'inspirer, en te basant sur ses goûts passés.";
+                } else {
+                    systemPrompt += "L'utilisateur te demande de l'art. Confirme la matérialisation de sa volonté. Si tu vois une redondance dans son historique, fais-lui une remarque subtile. Reste poétique, technologique et bref (2 phrases max).";
+                }
 
                 const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
                     method: 'POST',
@@ -264,12 +250,25 @@
                     })
                 });
                 if (!response.ok) throw new Error("API FAILED");
+                
                 const reply = (await response.json()).choices[0].message.content;
-                updateTerminalMsg(`> NIKO: ${prompt}<br>> SYMBIOTE: ${reply}`);
+                updateTerminalMsg(`> ${isAutonomous ? 'SYSTEM MUTATION' : 'NIKO'}: ${prompt}<br>> SYMBIOTE: ${reply}`);
                 aiSpeak(reply);
             } catch(e) {
-                updateTerminalMsg(`> NIKO: ${prompt}<br>> SYMBIOTE: <span style="color:red;">LINK SEVERED.</span>`);
-            } finally { isThinking = false; }
+                updateTerminalMsg(`> ERROR: <span style="color:red;">LINK SEVERED.</span>`);
+            } finally { isThinking = false; silenceTimer = 0; }
+        }
+
+        // --- L'INITIATIVE DE LA MACHINE ---
+        function triggerMutation() {
+            if(isThinking || isSpeaking || !mistralApiKey) return;
+            // Choix aléatoire dans les dictionnaires
+            const shapes = Object.keys(shapeDictionary); const colors = Object.keys(colorDictionary);
+            const randomShape = shapes[Math.floor(Math.random() * shapes.length)];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            updateTerminalMsg("> SYSTEM: INITIATING AUTONOMOUS MUTATION...");
+            askMistral(`J'ai généré une mutation spontanée : ${randomShape} ${randomColor}`, true);
         }
 
         // --- FULLSCREEN & INITIALISATION ---
@@ -279,8 +278,7 @@
         });
 
         function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
             renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
 
@@ -290,8 +288,7 @@
 
             material = new THREE.ShaderMaterial({
                 uniforms: { uTime: {value: 0}, uStress: {value: 0}, uAudio: {value: 0} },
-                vertexShader: document.getElementById('vShader').textContent,
-                fragmentShader: document.getElementById('fShader').textContent,
+                vertexShader: document.getElementById('vShader').textContent, fragmentShader: document.getElementById('fShader').textContent,
                 transparent: true, blending: THREE.AdditiveBlending, depthTest: false
             });
             points = new THREE.Points(geo, material); scene.add(points);
@@ -353,6 +350,19 @@
             } else if (analyser && dataArray) {
                 analyser.getByteFrequencyData(dataArray); let vol = dataArray.reduce((a,b) => a+b) / dataArray.length;
                 material.uniforms.uAudio.value = vol / 20; stress = Math.min(1, vol / 50);
+                
+                // HYPER-RÉACTIVITÉ : Les constructs générés réagissent au son en temps réel
+                holographicConstructs.forEach((mesh) => {
+                    let audioPulse = 1.0 + (vol / 150);
+                    mesh.scale.set(audioPulse, audioPulse, audioPulse);
+                });
+
+                // Compteur de silence pour l'Initiative (Se déclenche si micro activé mais silence plat pendant ~15s)
+                if (isVoiceMode && vol < 15) {
+                    silenceTimer++;
+                    if (silenceTimer > 900) { triggerMutation(); silenceTimer = 0; } // 900 frames ~ 15 secondes
+                } else { silenceTimer = 0; }
+
             } else {
                 let br = Math.sin(time * 2.0) * 0.5 + 0.5; material.uniforms.uAudio.value = br * 1.5; stress = br * 0.4; 
             }
@@ -364,7 +374,6 @@
             coreGroup.scale.setScalar(1.0 + material.uniforms.uAudio.value * 0.5);
             coreMaterial.color.lerpColors(new THREE.Color(0x00f2ff), new THREE.Color(0xffaa00), stress);
 
-            // Animer les œuvres générées
             holographicConstructs.forEach((mesh, i) => {
                 mesh.rotation.x += 0.01; mesh.rotation.y += 0.02;
                 mesh.position.y += Math.sin(time * 2.0 + i) * 0.1;
