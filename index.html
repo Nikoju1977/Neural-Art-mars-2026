@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NIKO | OMNI-DEVICE ATELIER WITH SIGNATURE</title>
+    <title>NIKO | ATELIER NEURAL V4 - MISTRAL CORE</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
@@ -11,28 +11,59 @@
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; touch-action: none; }
         #hud {
-            position: absolute; top: 20px; left: 20px; color: #00f2ff;
-            pointer-events: none; border-left: 2px solid #00f2ff; padding-left: 15px; z-index: 10;
+            position: absolute; top: 20px; left: 20px; color: #00f2ff; pointer-events: auto;
+            border-left: 2px solid #00f2ff; padding-left: 15px; z-index: 10;
+            text-shadow: 0 0 5px rgba(0, 242, 255, 0.5);
         }
         .stat { font-size: max(10px, 1vw); margin-bottom: 5px; letter-spacing: 2px; }
+        #fullscreen-btn { cursor: pointer; opacity: 0.8; transition: 0.2s; margin-top: 10px; display: inline-block; }
+        #fullscreen-btn:hover { opacity: 1; text-shadow: 0 0 8px #00f2ff; }
         #blink-flash {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: white; opacity: 0; pointer-events: none; z-index: 100;
         }
-        #interaction-layer {
-            position: absolute; top:0; left:0; width: 100vw; height: 100vh; z-index: 1;
+        #interaction-layer { position: absolute; top:0; left:0; width: 100vw; height: 100vh; z-index: 1; }
+        
+        /* TERMINAL MISTRAL AI */
+        #ai-terminal {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            width: 80%; max-width: 800px; z-index: 20; pointer-events: auto;
+            background: rgba(0, 15, 20, 0.6); border: 1px solid #00f2ff;
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.2); border-radius: 4px; padding: 15px;
+            display: flex; flex-direction: column; gap: 10px;
+            backdrop-filter: blur(5px);
         }
+        #chat-log {
+            color: #00f2ff; font-size: 14px; min-height: 40px; max-height: 150px;
+            overflow-y: auto; text-shadow: 0 0 5px #00f2ff; line-height: 1.4;
+        }
+        #chat-input-container { display: flex; gap: 10px; border-top: 1px solid rgba(0, 242, 255, 0.3); padding-top: 10px;}
+        #chat-input {
+            background: transparent; border: none; color: #fff; font-family: 'Orbitron', sans-serif;
+            font-size: 14px; flex-grow: 1; outline: none; letter-spacing: 1px;
+        }
+        #chat-input::placeholder { color: rgba(0, 242, 255, 0.4); }
     </style>
 </head>
 <body>
 
     <div id="blink-flash"></div>
     <div id="interaction-layer"></div>
+    
     <div id="hud">
         <div class="stat">OPERATOR: NIKO</div>
         <div class="stat" id="status">STATUS: STANDBY (CLICK TO WAKE)</div>
-        <div class="stat" id="stress-ui">CORE STABILITY: NOMINAL</div>
+        <div class="stat" id="stress-ui">CORE ALIGNMENT: NOMINAL</div>
         <div class="stat" id="gallery-count">MEMORIES: 0/5</div>
+        <div class="stat" id="fullscreen-btn">[ IMMERSION : OFF ]</div>
+    </div>
+
+    <div id="ai-terminal">
+        <div id="chat-log">> SYSTEM READY. WAITING FOR DIRECTIVE...</div>
+        <div id="chat-input-container">
+            <span style="color: #ffaa00;">></span>
+            <input type="text" id="chat-input" placeholder="ENTER PROMPT FOR MISTRAL CORE..." autocomplete="off"/>
+        </div>
     </div>
 
     <script id="vShader" type="x-shader/x-vertex">
@@ -42,48 +73,140 @@
         varying vec3 vColor;
         void main() {
             vec3 pos = position;
-            float angle = uTime * (0.5 + uStress) + length(pos.xz) * 0.1;
+            float angle = uTime * (0.2 + uStress * 0.5) + length(pos.xz) * 0.05;
             float s = sin(angle); float c = cos(angle);
             pos.xz *= mat2(c, -s, s, c);
-            pos.y += sin(uTime + pos.x) * uAudio * 2.0;
+            pos.y += sin(uTime + pos.x) * uAudio * 3.0;
             
-            vColor = mix(vec3(0.0, 0.9, 1.0), vec3(1.0, 0.0, 0.2), uStress);
+            vec3 colorZen = vec3(0.0, 0.9, 0.8);
+            vec3 colorStress = vec3(1.0, 0.6, 0.1);
+            vColor = mix(colorZen, colorStress, uStress);
+            
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
-            
-            // Adaptation de la taille des particules selon l'écran
-            gl_PointSize = (4.0 + uAudio * 5.0) * (200.0 / -mvPos.z);
+            gl_PointSize = (3.0 + uAudio * 4.0) * (200.0 / -mvPos.z);
             gl_Position = projectionMatrix * mvPos;
         }
     </script>
-
     <script id="fShader" type="x-shader/x-fragment">
         varying vec3 vColor;
         void main() {
             if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
-            gl_FragColor = vec4(vColor, 1.0);
+            gl_FragColor = vec4(vColor, 0.8);
         }
     </script>
 
     <script>
+        // ==========================================
+        // CONFIGURATION MISTRAL AI (À REMPLIR)
+        // Obtenir une clé sur console.mistral.ai
+        // ==========================================
+        const MISTRAL_API_KEY = "TA_CLE_API_MISTRAL_ICI"; 
+        // ==========================================
+
         let scene, camera, renderer, points, material;
+        let coreGroup, coreSphere, coreCube, coreMetatron, coreMaterial;
         let audioContext, analyser, dataArray;
         let stress = 0, gallery = [];
         let isWebGazerActive = false;
-        let syntheticBreathing = 0; // Fallback si pas de micro
+        let syntheticBreathing = 0;
+        let isThinking = false; // Bloque le stress en haut pendant le calcul AI
         const MAX_GALLERY = 5;
 
-        // --- INITIALISATION ---
+        // --- MISTRAL AI LOGIC ---
+        const chatInput = document.getElementById('chat-input');
+        const chatLog = document.getElementById('chat-log');
+        let typeWriterInterval;
+
+        chatInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter' && this.value.trim() !== '') {
+                const prompt = this.value;
+                this.value = '';
+                askMistral(prompt);
+            }
+        });
+
+        async function askMistral(prompt) {
+            if (MISTRAL_API_KEY === "TA_CLE_API_MISTRAL_ICI") {
+                typeWriter("> ERROR: MISTRAL API KEY MISSING. PLEASE CONFIGURE IN SOURCE CODE.");
+                return;
+            }
+
+            // Déclenchement de l'état "THINKING" (Le vortex s'emballe et devient Ambre)
+            isThinking = true;
+            stress = 0.9;
+            document.getElementById('status').innerText = "STATUS: COGNITIVE PROCESSING...";
+            chatLog.innerHTML = `> NIKO: ${prompt}<br>> MISTRAL: <span style="color:#ffaa00;">PROCESSING NEURAL PATHWAYS...</span>`;
+
+            try {
+                const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${MISTRAL_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "mistral-small-latest",
+                        messages: [
+                            {role: "system", content: "Tu es le Core Mistral, l'intelligence artificielle intégrée dans l'Atelier Neural de l'artiste Niko (nous sommes en 2026). Tu réponds de manière concise, technologique et légèrement futuriste. Limite tes réponses à 3-4 phrases maximum pour un affichage sur terminal holographique."},
+                            {role: "user", content: prompt}
+                        ]
+                    })
+                });
+
+                if (!response.ok) throw new Error("API Connection Failed");
+
+                const data = await response.json();
+                const reply = data.choices[0].message.content;
+                typeWriter(`> NIKO: ${prompt}<br>> MISTRAL: ${reply}`);
+
+            } catch(e) {
+                console.error(e);
+                typeWriter(`> NIKO: ${prompt}<br>> MISTRAL: <span style="color:red;">SYSTEM FAILURE. UNABLE TO REACH CORE.</span>`);
+            } finally {
+                // Retour au calme
+                isThinking = false;
+                document.getElementById('status').innerText = "STATUS: NEURAL LINK ACTIVE";
+            }
+        }
+
+        function typeWriter(htmlContent) {
+            clearInterval(typeWriterInterval);
+            chatLog.innerHTML = "";
+            let i = 0;
+            // Astuce pour gérer les balises HTML dans le typewriter
+            let tempDiv = document.createElement("div");
+            tempDiv.innerHTML = htmlContent;
+            let textArray = tempDiv.childNodes;
+            
+            chatLog.innerHTML = htmlContent; // Pour ce prototype FUI, on affiche direct pour garder le style HTML propre, on pourrait complexifier le typewriter plus tard.
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        // --- GESTION DU PLEIN ÉCRAN ---
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+                fullscreenBtn.innerText = "[ IMMERSION : ON ]";
+            } else if (document.exitFullscreen) {
+                document.exitFullscreen();
+                fullscreenBtn.innerText = "[ IMMERSION : OFF ]";
+            }
+        });
+
+        // --- INITIALISATION THREE.JS ---
         function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimisation mobile
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(renderer.domElement);
 
+            // 1. LE VORTEX
             const geo = new THREE.BufferGeometry();
-            const pos = new Float32Array(15000 * 3);
-            for(let i=0; i<45000; i++) pos[i] = (Math.random()-0.5) * 80;
+            const pos = new Float32Array(12000 * 3);
+            for(let i=0; i<36000; i++) pos[i] = (Math.random()-0.5) * 120;
             geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 
             material = new THREE.ShaderMaterial({
@@ -92,114 +215,107 @@
                 fragmentShader: document.getElementById('fShader').textContent,
                 transparent: true, blending: THREE.AdditiveBlending, depthTest: false
             });
-
             points = new THREE.Points(geo, material);
             scene.add(points);
-            camera.position.z = window.innerWidth < 768 ? 120 : 100; // Recul caméra sur mobile
 
-            // Tentative d'initialisation de WebGazer (Echoue silencieusement sur certains mobiles)
+            // 2. LE NOYAU QUANTIQUE
+            coreGroup = new THREE.Group();
+            coreMaterial = new THREE.LineBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+
+            const sphereGeo = new THREE.EdgesGeometry(new THREE.SphereGeometry(8, 12, 12));
+            coreSphere = new THREE.LineSegments(sphereGeo, coreMaterial);
+            coreGroup.add(coreSphere);
+
+            const cubeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(15, 15, 15));
+            coreCube = new THREE.LineSegments(cubeGeo, coreMaterial);
+            coreGroup.add(coreCube);
+
+            const metaGeo = new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(22, 1));
+            coreMetatron = new THREE.LineSegments(metaGeo, coreMaterial);
+            coreGroup.add(coreMetatron);
+
+            scene.add(coreGroup);
+            camera.position.z = window.innerWidth < 768 ? 140 : 100;
+
+            // Capteurs de regard
             try {
                 webgazer.setGazeListener((data) => {
                     if (!data) { handleBlink(); return; }
                     isWebGazerActive = true;
-                    updateVortexRotation(data.x, data.y);
+                    updateRotation(data.x, data.y);
                 }).begin();
                 webgazer.showVideoPreview(false).showPredictionPoints(false);
-            } catch(e) {
-                console.warn("WebGazer non supporté sur ce navigateur.");
-            }
+            } catch(e) {}
 
-            // Fallback Tactile & Souris
-            const interactionLayer = document.getElementById('interaction-layer');
-            interactionLayer.addEventListener('mousemove', (e) => {
-                if(!isWebGazerActive) updateVortexRotation(e.clientX, e.clientY);
-            });
-            interactionLayer.addEventListener('touchmove', (e) => {
-                if(!isWebGazerActive) updateVortexRotation(e.touches[0].clientX, e.touches[0].clientY);
-            }, {passive: true});
-
-            // Fallback Clignement par Double-Tap (Mobile) ou Double-Clic
-            interactionLayer.addEventListener('dblclick', handleBlink);
+            const interact = document.getElementById('interaction-layer');
+            interact.addEventListener('mousemove', (e) => { if(!isWebGazerActive) updateRotation(e.clientX, e.clientY); });
+            interact.addEventListener('touchmove', (e) => { if(!isWebGazerActive) updateRotation(e.touches[0].clientX, e.touches[0].clientY); }, {passive: true});
+            interact.addEventListener('dblclick', handleBlink);
             let lastTap = 0;
-            interactionLayer.addEventListener('touchstart', (e) => {
-                let currentTime = new Date().getTime();
-                let tapLength = currentTime - lastTap;
-                if (tapLength < 500 && tapLength > 0) { handleBlink(); e.preventDefault(); }
-                lastTap = currentTime;
+            interact.addEventListener('touchstart', (e) => {
+                let curr = new Date().getTime();
+                if (curr - lastTap < 500 && curr - lastTap > 0) { handleBlink(); e.preventDefault(); }
+                lastTap = curr;
             });
 
             window.addEventListener('resize', onWindowResize, false);
             animate();
         }
 
-        function updateVortexRotation(x, y) {
+        function updateRotation(x, y) {
             const normX = (x / window.innerWidth) * 2 - 1;
             const normY = -(y / window.innerHeight) * 2 + 1;
-            gsap.to(points.rotation, { x: normY * 0.5, y: normX * 0.5, duration: 0.8 });
+            gsap.to(points.rotation, { x: normY * 0.3, y: normX * 0.3, duration: 1.0 });
+            gsap.to(coreGroup.rotation, { x: normY * -0.2, y: normX * -0.2, duration: 1.5 });
         }
 
         async function initSensors() {
+            if (audioContext) return; // Évite les relances multiples
             document.getElementById('status').innerText = "STATUS: INITIALIZING...";
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const source = audioContext.createMediaStreamSource(stream);
                 analyser = audioContext.createAnalyser();
-                source.connect(analyser);
+                audioContext.createMediaStreamSource(stream).connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
-                document.getElementById('status').innerText = "STATUS: FULL SENSORY SYNC";
+                document.getElementById('status').innerText = "STATUS: NEURAL LINK ACTIVE";
             } catch(err) {
                 document.getElementById('status').innerText = "STATUS: BASIC MODE (MIC DENIED)";
             }
         }
 
-        // --- BLINK & GALLERY WITH SIGNATURE ---
         function handleBlink() {
-            if(gallery.length >= MAX_GALLERY) return; // Limite atteinte
-
+            if(gallery.length >= MAX_GALLERY) return;
             gsap.to("#blink-flash", { opacity: 1, duration: 0.05, yoyo: true, repeat: 1 });
             
-            // 1. Capture du canvas Three.js actuel
             const originalImgData = renderer.domElement.toDataURL("image/png");
-
-            // 2. Création d'un canvas temporaire pour dessiner la signature
             const tempCanvas = document.createElement('canvas');
             const ctx = tempCanvas.getContext('2d');
             const img = new Image();
 
             img.onload = function() {
-                // Ajuster le canvas temporaire à la taille de l'image capturée
-                tempCanvas.width = img.width;
-                tempCanvas.height = img.height;
-
-                // Dessiner l'image originale
+                tempCanvas.width = img.width; tempCanvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
-
-                // Configurer et dessiner la signature "Niko 2026"
-                // Utilisation d'une police futuriste et de la couleur cyan par défaut
+                
                 ctx.font = 'bold 24px Orbitron, sans-serif'; 
-                ctx.fillStyle = '#00f2ff';
+                ctx.fillStyle = stress > 0.5 ? '#ffaa00' : '#00f2ff';
                 ctx.textAlign = 'right';
-                // Positionner en bas à droite avec une marge
-                ctx.fillText('Niko 2026', img.width - 30, img.height - 30);
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.shadowBlur = 10;
+                ctx.fillText('Niko 2026', img.width - 40, img.height - 40);
 
-                // 3. Créer la texture Three.js à partir du canvas signé
-                const signedTex = new THREE.CanvasTexture(tempCanvas);
                 const plane = new THREE.Mesh(
-                    new THREE.PlaneGeometry(15, 10),
-                    new THREE.MeshBasicMaterial({ map: signedTex, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
+                    new THREE.PlaneGeometry(18, 12),
+                    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(tempCanvas), transparent: true, opacity: 0.8, side: THREE.DoubleSide })
                 );
 
-                // 4. Positionner en orbite
                 const angle = (gallery.length / MAX_GALLERY) * Math.PI * 2;
-                plane.position.set(Math.cos(angle)*60, Math.sin(angle)*30, Math.sin(angle)*60);
+                plane.position.set(Math.cos(angle)*70, Math.sin(angle)*30, Math.sin(angle)*70);
                 plane.lookAt(0,0,0);
                 scene.add(plane);
                 gallery.push(plane);
                 document.getElementById('gallery-count').innerText = `MEMORIES: ${gallery.length}/5`;
             };
-
-            // Charger l'image originale pour déclencher le dessin de la signature
             img.src = originalImgData;
         }
 
@@ -207,38 +323,60 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            camera.position.z = window.innerWidth < 768 ? 120 : 100;
         }
 
         function animate(t) {
             requestAnimationFrame(animate);
-            material.uniforms.uTime.value = t * 0.001;
+            let time = t * 0.001;
+            material.uniforms.uTime.value = time;
             
-            if (analyser && dataArray) {
+            // Si l'IA réfléchit, on force le stress visuel
+            if (isThinking) {
+                stress = 0.9;
+                material.uniforms.uAudio.value = Math.sin(time * 10.0) * 0.5 + 0.5; // Battement cardiaque rapide
+            } else if (analyser && dataArray) {
                 analyser.getByteFrequencyData(dataArray);
                 let vol = dataArray.reduce((a,b) => a+b) / dataArray.length;
                 material.uniforms.uAudio.value = vol / 20;
                 stress = Math.min(1, vol / 50);
             } else {
-                // Respiration synthétique si pas de micro
-                syntheticBreathing = Math.sin(t * 0.002) * 0.5 + 0.5;
-                material.uniforms.uAudio.value = syntheticBreathing * 2.0;
-                stress = syntheticBreathing * 0.3; 
+                syntheticBreathing = Math.sin(time * 2.0) * 0.5 + 0.5;
+                material.uniforms.uAudio.value = syntheticBreathing * 1.5;
+                stress = syntheticBreathing * 0.4; 
             }
 
             material.uniforms.uStress.value = stress;
-            document.getElementById('stress-ui').innerText = `CORE LOAD: ${Math.floor(stress*100)}%`;
+            document.getElementById('stress-ui').innerText = `CORE ALIGNMENT: ${100 - Math.floor(stress*100)}%`;
+
+            // Rotation asynchrone des couches
+            let speedMultiplier = isThinking ? 3.0 : 1.0; // Le cube tourne plus vite si Mistral calcule
+            coreSphere.rotation.y = time * 0.5 * speedMultiplier;
+            coreSphere.rotation.x = time * 0.3 * speedMultiplier;
+            
+            coreCube.rotation.x = time * -0.2 * speedMultiplier;
+            coreCube.rotation.z = time * 0.4 * speedMultiplier;
+            
+            coreMetatron.rotation.y = time * 0.1 * speedMultiplier;
+            coreMetatron.rotation.z = time * -0.15 * speedMultiplier;
+
+            let pulse = 1.0 + material.uniforms.uAudio.value * 0.5;
+            coreGroup.scale.set(pulse, pulse, pulse);
+
+            const colorZen = new THREE.Color(0x00f2ff);
+            const colorStress = new THREE.Color(0xffaa00);
+            coreMaterial.color.lerpColors(colorZen, colorStress, stress);
 
             gallery.forEach((mesh, i) => {
-                mesh.position.y += Math.sin(t * 0.001 + i) * 0.1;
-                mesh.rotation.y += 0.01;
+                mesh.position.y += Math.sin(time + i) * 0.05;
+                mesh.rotation.y += 0.005;
             });
 
             renderer.render(scene, camera);
         }
 
+        // On sépare l'initialisation de l'audio de celle du clic pour pouvoir taper dans le chat
         document.getElementById('interaction-layer').addEventListener('click', () => { 
-            if(!audioContext) initSensors(); 
+            initSensors(); 
         }, {once: true});
         
         window.onload = init;
