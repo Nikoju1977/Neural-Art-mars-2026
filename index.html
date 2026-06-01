@@ -5,15 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>NIKO | ATELIER NEURAL V19 - THE PERFECT MIRROR (AR)</title>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+
+/* ── AbortController + Retry + Debounce — Studio Niko Design ── */
+const nikoFetch = (() => {
+  let _ctrl = null;
+  return async function(url, opts={}, retries=3) {
+    if(_ctrl) _ctrl.abort();
+    _ctrl = new AbortController();
+    opts.signal = _ctrl.signal;
+    for(let i=0; i<retries; i++) {
+      try {
+        const r = await fetch(url, opts);
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r;
+      } catch(e) {
+        if(e.name==='AbortError') throw e;
+        if(i===retries-1) throw e;
+        await new Promise(res=>setTimeout(res, 800*(i+1)));
+      }
+    }
+  };
+})();
+
+function nikoDebounce(fn, ms=400) {
+  let t; return (...a) => { clearTimeout(t); t=setTimeout(()=>fn(...a), ms); };
+}
+
+function nikoRetryBtn(container, fn) {
+  const btn = document.createElement('button');
+  btn.textContent = '↺ Réessayer';
+  btn.style.cssText='margin-top:8px;padding:6px 14px;background:rgba(0,255,157,.15);border:1px solid #00ff9d;color:#00ff9d;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px';
+  btn.onclick = () => { btn.remove(); fn(); };
+  if(container) container.appendChild(btn);
+}
+
+</script>
+    <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/webgazer.js/0.9.0/webgazer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4.1633559310/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/hands.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.4.1633559310/drawing_utils.js" crossorigin="anonymous"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/webgazer.js/0.9.0/webgazer.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4.1633559310/camera_utils.js" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/hands.js" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.4.1633559310/drawing_utils.js" crossorigin="anonymous"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
@@ -172,6 +208,30 @@
 .skeleton{background:linear-gradient(90deg,rgba(0,255,157,.07) 25%,rgba(0,255,157,.15) 50%,rgba(0,255,157,.07) 75%);background-size:200% 100%;animation:skel-wave 1.4s infinite;border-radius:6px;min-height:1em}
 @keyframes skel-wave{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
+
+/* ── GPU acceleration hints ── */
+@media (prefers-reduced-motion: no-preference) {
+  [class*="btn"],[class*="button"],[class*="card"],[class*="modal"],[class*="tab"],[class*="panel"] {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; }
+}
+
+
+/* ── Dark mode system preference — Studio Niko Design ── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f0f4f8;
+    --bg2: #e2e8f0;
+    --text: #1a202c;
+    --accent: #0070f3;
+  }
+  body { background: var(--bg); color: var(--text); }
+}
+
 </style>
 <script>
 
@@ -248,7 +308,7 @@ const safeStorage = (() => {
 
   <meta name="description" content="Neural Art — Application de peinture numérique IA avec brosses à physique de ressort et rendu WebGL.">
   <meta name="author" content="Nicolas Julienne — Studio Niko Design">
-  <meta name="theme-color" content="#ff0080">
+  <meta name="theme-color" content="#ff0080" media="(prefers-color-scheme: dark)">
   <meta property="og:title" content="Neural Art 2026 | Studio Niko Design">
   <meta property="og:description" content="Peinture numérique IA — 10 brosses, physique ressort, WebGL, 16 modes de fusion, export SVG">
   <meta property="og:type" content="website">
