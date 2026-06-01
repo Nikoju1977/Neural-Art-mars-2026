@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>NIKO | ATELIER NEURAL V19 - THE PERFECT MIRROR (AR)</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -17,7 +17,8 @@
 
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { 
+        body {
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); 
             margin: 0; 
             background: #000; 
             overflow: hidden; 
@@ -166,6 +167,11 @@
   .niko-loading-ring{width:48px;height:48px;border:3px solid rgba(0,255,157,.2);border-top-color:#00ff9d;border-radius:50%;animation:niko-spin .8s linear infinite}
   @keyframes niko-spin{to{transform:rotate(360deg)}}
   .niko-loading.hidden{opacity:0;pointer-events:none;transition:opacity .3s}
+
+/* ── Skeleton Loader ─────────────────────────── */
+.skeleton{background:linear-gradient(90deg,rgba(0,255,157,.07) 25%,rgba(0,255,157,.15) 50%,rgba(0,255,157,.07) 75%);background-size:200% 100%;animation:skel-wave 1.4s infinite;border-radius:6px;min-height:1em}
+@keyframes skel-wave{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
 </style>
   <meta name="description" content="Neural Art — Application de peinture numérique IA avec brosses à physique de ressort et rendu WebGL.">
   <meta name="author" content="Nicolas Julienne — Studio Niko Design">
@@ -177,8 +183,13 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Neural Art 2026 | Studio Niko Design">
   <meta name="twitter:description" content="Peinture numérique IA — 10 brosses, physique ressort, WebGL, 16 modes de fusion, export SVG">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
-<body>
+<body role="application" aria-label="Neural Art — Peinture numérique IA">
+<main id="app" tabindex="-1">
+<h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Neural Art</h1>
+
 
     <div id="interaction-layer"></div>
     <video class="input_video"></video>
@@ -273,7 +284,6 @@
                 arButton.innerText = "[ INVERT MATRIX (AR) ]";
                 document.getElementById('ar-container').appendChild(arButton);
             } catch(e) {
-                console.log("AR not available:", e);
             }
 
             // Background vortex
@@ -645,5 +655,24 @@
     </script>
 
 <div class="niko-loading hidden" id="nikoLoader"><div class="niko-loading-ring"></div></div>
+
+</main>
+
+<script>
+if('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    const swCode = `
+const CACHE='niko-v1';
+const ASSETS=['./','/index.html'];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
+self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
+    `;
+    const blob = new Blob([swCode],{type:'text/javascript'});
+    const swURL = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swURL).catch(()=>{});
+  });
+}
+</script>
 </body>
 </html>
