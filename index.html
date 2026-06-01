@@ -149,7 +149,7 @@
             top:0; 
             left:0; 
             width: 100vw; 
-            height: 100vh; 
+            height: 100dvh; 
             z-index: 1; 
         }
         
@@ -160,7 +160,23 @@
         #webgazerVideoFeed {
             display: none !important;
         }
-    </style>
+    
+  /* Studio Niko — Loading State */
+  .niko-loading{position:fixed;inset:0;background:rgba(5,10,13,.85);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px)}
+  .niko-loading-ring{width:48px;height:48px;border:3px solid rgba(0,255,157,.2);border-top-color:#00ff9d;border-radius:50%;animation:niko-spin .8s linear infinite}
+  @keyframes niko-spin{to{transform:rotate(360deg)}}
+  .niko-loading.hidden{opacity:0;pointer-events:none;transition:opacity .3s}
+</style>
+  <meta name="description" content="Neural Art — Application de peinture numérique IA avec brosses à physique de ressort et rendu WebGL.">
+  <meta name="author" content="Nicolas Julienne — Studio Niko Design">
+  <meta name="theme-color" content="#ff0080">
+  <meta property="og:title" content="Neural Art 2026 | Studio Niko Design">
+  <meta property="og:description" content="Peinture numérique IA — 10 brosses, physique ressort, WebGL, 16 modes de fusion, export SVG">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nikoju1977.github.io/Neural-Art-mars-2026/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Neural Art 2026 | Studio Niko Design">
+  <meta name="twitter:description" content="Peinture numérique IA — 10 brosses, physique ressort, WebGL, 16 modes de fusion, export SVG">
 </head>
 <body>
 
@@ -627,5 +643,7 @@
 
         initThree();
     </script>
+
+<div class="niko-loading hidden" id="nikoLoader"><div class="niko-loading-ring"></div></div>
 </body>
 </html>
