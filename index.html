@@ -253,67 +253,7 @@ function nikoRetryBtn(container, fn) {
           await safeStorage.getItem(key)
           await safeStorage.removeItem(key)
 ─────────────────────────────────────────────────────────────────── */
-const safeStorage = (() => {
-  const SALT_KEY = '__niko_salt__';
-  const enc = new TextEncoder();
-  const dec = new TextDecoder();
-
-  async function _getKey() {
-    let salt = safeStorage.getItem(SALT_KEY);
-    if (!salt) {
-      salt = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map(b => b.toString(16).padStart(2,'0')).join('');
-      safeStorage.setItem(SALT_KEY, salt);
-    }
-    const keyMat = await crypto.subtle.importKey(
-      'raw', enc.encode(salt + navigator.userAgent.slice(0,32)),
-      { name:'PBKDF2' }, false, ['deriveKey']
-    );
-    return crypto.subtle.deriveKey(
-      { name:'PBKDF2', salt: enc.encode(salt), iterations:100000, hash:'SHA-256' },
-      keyMat, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
-    );
-  }
-
-  async function setItem(key, value) {
-    try {
-      const k = await _getKey();
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const ct = await crypto.subtle.encrypt(
-        { name:'AES-GCM', iv }, k, enc.encode(JSON.stringify(value))
-      );
-      const payload = JSON.stringify({
-        iv: Array.from(iv),
-        ct: Array.from(new Uint8Array(ct))
-      });
-      safeStorage.setItem('__enc_' + key, payload);
-    } catch(e) {
-      safeStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
-    }
-  }
-
-  async function getItem(key) {
-    try {
-      const raw = safeStorage.getItem('__enc_' + key);
-      if (!raw) return safeStorage.getItem(key); // fallback unencrypted
-      const { iv, ct } = JSON.parse(raw);
-      const k = await _getKey();
-      const pt = await crypto.subtle.decrypt(
-        { name:'AES-GCM', iv: new Uint8Array(iv) }, k, new Uint8Array(ct)
-      );
-      return JSON.parse(dec.decode(pt));
-    } catch(e) {
-      return safeStorage.getItem(key);
-    }
-  }
-
-  async function removeItem(key) {
-    safeStorage.removeItem('__enc_' + key);
-    safeStorage.removeItem(key);
-  }
-
-  return { setItem, getItem, removeItem };
-})();
+const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
 
 </script>
 
