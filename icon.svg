@@ -1,1 +1,60 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#050a0d"/><text x="256" y="330" font-family="monospace" font-size="280" font-weight="bold" fill="#00ff9d" text-anchor="middle">N</text><rect x="40" y="40" width="432" height="432" fill="none" stroke="#00d4ff" stroke-width="8" opacity="0.5"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="neuralGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#00ff9d;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#00f2ff;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#050a0d;stop-opacity:1" />
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" fill="#050a0d"/>
+  
+  <!-- Neural network grid background -->
+  <g stroke="#00f2ff" stroke-width="1" opacity="0.3">
+    <line x1="50" y1="256" x2="462" y2="256"/>
+    <line x1="256" y1="50" x2="256" y2="462"/>
+    <line x1="100" y1="100" x2="412" y2="412"/>
+    <line x1="100" y1="412" x2="412" y2="100"/>
+  </g>
+  
+  <!-- Central brush stroke circle -->
+  <circle cx="256" cy="256" r="150" fill="url(#neuralGlow)" opacity="0.9" filter="url(#glow)"/>
+  
+  <!-- Paint strokes in cross pattern -->
+  <g stroke="#00ff9d" stroke-width="8" stroke-linecap="round" fill="none" filter="url(#glow)">
+    <!-- Vertical stroke -->
+    <path d="M 256 120 Q 260 180 256 256 Q 252 320 256 380" opacity="0.9"/>
+    <!-- Horizontal stroke -->
+    <path d="M 120 256 Q 180 260 256 256 Q 320 252 380 256" opacity="0.9"/>
+    <!-- Diagonal strokes -->
+    <path d="M 160 160 L 256 256 L 340 340" opacity="0.7"/>
+    <path d="M 340 160 L 256 256 L 160 340" opacity="0.7"/>
+  </g>
+  
+  <!-- Accent dots (network nodes) -->
+  <g fill="#ffaa00" filter="url(#glow)">
+    <circle cx="256" cy="100" r="6"/>
+    <circle cx="356" cy="156" r="5"/>
+    <circle cx="380" cy="256" r="6"/>
+    <circle cx="356" cy="356" r="5"/>
+    <circle cx="256" cy="380" r="6"/>
+    <circle cx="156" cy="356" r="5"/>
+    <circle cx="100" cy="256" r="6"/>
+    <circle cx="156" cy="156" r="5"/>
+  </g>
+  
+  <!-- Center focus point -->
+  <circle cx="256" cy="256" r="20" fill="none" stroke="#ff00aa" stroke-width="3" filter="url(#glow)"/>
+  <circle cx="256" cy="256" r="12" fill="#ff00aa" opacity="0.8"/>
+  
+  <!-- Border accent -->
+  <rect x="20" y="20" width="472" height="472" fill="none" stroke="#00f2ff" stroke-width="2" opacity="0.6"/>
+</svg>
