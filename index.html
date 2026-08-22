@@ -13,7 +13,7 @@ removeItem:function(k){try{if(ls)ls.removeItem(k);}catch(e){}mem.delete(k);},
 clear:function(){try{if(ls)ls.clear();}catch(e){}mem.clear();},
 key:function(i){try{if(ls)return ls.key(i);}catch(e){}var a=Array.from(mem.keys());return i<a.length?a[i]:null;},
 get length(){try{if(ls)return ls.length;}catch(e){}return mem.size;}};})();
-window.nikoFetch = window.nikoFetch || function(url,opts){function xhr(){opts=opts||{};return new Promise(function(res,rej){var x=new XMLHttpRequest();x.open((opts.method||'GET'),url,true);if(opts.headers){Object.keys(opts.headers).forEach(function(h){try{x.setRequestHeader(h,opts.headers[h]);}catch(e){}});}x.onload=function(){res({ok:x.status>=200&&x.status<300,status:x.status,statusText:x.statusText,url:url,text:function(){return Promise.resolve(x.responseText);},json:function(){return Promise.resolve(JSON.parse(x.responseText));},headers:{get:function(n){return x.getResponseHeader(n);}}});};x.onerror=function(){rej(new TypeError('Network request failed'));};x.send(opts.body||null);});}
+window.nikoFetch = window.nikoFetch || function(url,opts){function xhr(){opts=opts||{};return new Promise(function(res,rej){var x=new XMLHttpRequest();x.open((opts.method||'GET'),url,true);if(opts.headers){Object.keys(opts.headers).forEach(function(h){x.setRequestHeader(h,opts.headers[h]);});}x.onload=function(){res({ok:x.status>=200&&x.status<300,status:x.status,json:function(){return Promise.resolve(JSON.parse(x.responseText))}});};x.onerror=function(){rej(new Error('XHR failed'));};if(opts.body)x.send(opts.body);else x.send();});return new Promise(function(res,rej){if(opts.signal){opts.signal.addEventListener('abort',function(){rej(new Error('AbortError'));});}xhr().then(res).catch(rej);});}
 if(window.fetch){return window.fetch(url,opts).catch(function(){return xhr();});}return xhr();};
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -28,7 +28,7 @@ const nikoFetch = (() => {
     opts.signal = _ctrl.signal;
     for(let i=0; i<retries; i++) {
       try {
-        const r = await (window.nikoFetch||window.fetch)(url, opts);
+        const r = await (window.fetch || window.nikoFetch)(url, opts);
         if(!r.ok) throw new Error(`HTTP ${r.status}`);
         return r;
       } catch(e) {
@@ -216,7 +216,7 @@ function nikoRetryBtn(container, fn) {
   .niko-loading.hidden{opacity:0;pointer-events:none;transition:opacity .3s}
 
 /* ── Skeleton Loader ─────────────────────────── */
-.skeleton{background:linear-gradient(90deg,rgba(0,255,157,.07) 25%,rgba(0,255,157,.15) 50%,rgba(0,255,157,.07) 75%);background-size:200% 100%;animation:skel-wave 1.4s infinite;border-radius:6px;min-height:1em}
+.skeleton{background:linear-gradient(90deg,rgba(0,255,157,.07) 25%,rgba(0,255,157,.15) 50%,rgba(0,255,157,.07) 75%);background-size:200% 100%;animation:skel-wave 1.4s infinite;border-radius:6px;min-height:12px}
 @keyframes skel-wave{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 
@@ -252,7 +252,7 @@ function nikoRetryBtn(container, fn) {
    Usage: await safeStorage.setItem(key, value)
           await safeStorage.getItem(key)
           await safeStorage.removeItem(key)
-─────────────────────────────────────────────────────────────────── */
+──────────────────────────────────────────────────────────────────── */
 const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
 
 </script>
@@ -322,12 +322,15 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
     </script>
 
     <script>
+        /* ── Defer initialization until all libs are loaded ── */
         let scene, camera, renderer, backgroundVortex, paintGroup;
         let currentBrushColorHex = 0x00f2ff;
         let isPinching = false;
         let handsTrackingActive = false;
         let gazeTarget = { x: 0, y: 0 };
         let strokeCount = 0;
+        let handsProcessingActive = false;
+        let videoElement, hands;
         
         const colorDictionary = {
             'rose': 0xff00ff, 'rouge': 0xff0000, 'bleu': 0x0088ff, 'vert': 0x00ff00,
@@ -356,20 +359,23 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
 
             // AR Button
             try {
-                const arButton = ARButton.createButton(renderer, { 
-                    requiredFeatures: ['hit-test'],
-                    optionalFeatures: ['dom-overlay', 'dom-overlay-for-handheld-ar'],
-                    domOverlay: { root: document.body }
-                });
-                arButton.style.position = 'relative';
-                arButton.style.bottom = 'auto';
-                arButton.style.fontFamily = 'Orbitron';
-                arButton.style.backgroundColor = 'transparent';
-                arButton.style.color = '#bd00ff';
-                arButton.style.border = '1px solid #bd00ff';
-                arButton.innerText = "[ INVERT MATRIX (AR) ]";
-                document.getElementById('ar-container').appendChild(arButton);
+                if (typeof ARButton !== 'undefined') {
+                    const arButton = ARButton.createButton(renderer, { 
+                        requiredFeatures: ['hit-test'],
+                        optionalFeatures: ['dom-overlay', 'dom-overlay-for-handheld-ar'],
+                        domOverlay: { root: document.body }
+                    });
+                    arButton.style.position = 'relative';
+                    arButton.style.bottom = 'auto';
+                    arButton.style.fontFamily = 'Orbitron';
+                    arButton.style.backgroundColor = 'transparent';
+                    arButton.style.color = '#bd00ff';
+                    arButton.style.border = '1px solid #bd00ff';
+                    arButton.innerText = "[ INVERT MATRIX (AR) ]";
+                    document.getElementById('ar-container').appendChild(arButton);
+                }
             } catch(e) {
+                console.warn('ARButton not available:', e);
             }
 
             // Background vortex
@@ -405,20 +411,23 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
         }
 
         function animateThree(t) {
+            if (!backgroundVortex) return;
             backgroundVortex.material.uniforms.uTime.value = (t || 0) * 0.001;
             
             if (!renderer.xr.isPresenting) {
                 backgroundVortex.visible = true;
-                gsap.to(backgroundVortex.rotation, { 
-                    x: gazeTarget.y * 0.3, 
-                    y: gazeTarget.x * 0.3, 
-                    duration: 1.0 
-                });
-                gsap.to(paintGroup.rotation, { 
-                    x: gazeTarget.y * -0.1, 
-                    y: gazeTarget.x * -0.1, 
-                    duration: 1.5 
-                });
+                if (typeof gsap !== 'undefined') {
+                    gsap.to(backgroundVortex.rotation, { 
+                        x: gazeTarget.y * 0.3, 
+                        y: gazeTarget.x * 0.3, 
+                        duration: 1.0 
+                    });
+                    gsap.to(paintGroup.rotation, { 
+                        x: gazeTarget.y * -0.1, 
+                        y: gazeTarget.x * -0.1, 
+                        duration: 1.5 
+                    });
+                }
             } else {
                 backgroundVortex.visible = false;
                 paintGroup.position.set(0, 0, -50); 
@@ -434,50 +443,65 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
         }
 
         // MediaPipe Hands Setup
-        const videoElement = document.querySelector('.input_video');
-        const canvasElement = document.createElement('canvas');
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/${file}`
-        });
-        
-        hands.setOptions({ 
-            maxNumHands: 1, 
-            modelComplexity: 1, 
-            minDetectionConfidence: 0.7, 
-            minTrackingConfidence: 0.7 
-        });
-        
-        hands.onResults((results) => {
-            if (renderer.xr.isPresenting) return;
-            
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                handsTrackingActive = true;
-                document.getElementById('hand-status').innerText = "HANDS: ACTIVE";
-                
-                const landmarks = results.multiHandLandmarks[0];
-                const indexTip = landmarks[8];
-                const thumbTip = landmarks[4];
-                
-                const distance = Math.sqrt(
-                    Math.pow(indexTip.x - thumbTip.x, 2) + 
-                    Math.pow(indexTip.y - thumbTip.y, 2)
-                );
-                
-                if (distance < 0.05) {
-                    if (!isPinching) isPinching = true;
-                    drawPaintStroke(indexTip.x, indexTip.y);
-                } else { 
-                    isPinching = false; 
-                }
-            } else {
-                handsTrackingActive = false;
-                document.getElementById('hand-status').innerText = "HANDS: OFFLINE";
-                isPinching = false;
+        async function setupMediaPipeHands() {
+            if (typeof Hands === 'undefined') {
+                console.warn('MediaPipe Hands not loaded');
+                return false;
             }
-        });
+            
+            videoElement = document.querySelector('.input_video');
+            hands = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/${file}`
+            });
+            
+            hands.setOptions({ 
+                maxNumHands: 1, 
+                modelComplexity: 1, 
+                minDetectionConfidence: 0.7, 
+                minTrackingConfidence: 0.7 
+            });
+            
+            hands.onResults((results) => {
+                if (renderer.xr.isPresenting) return;
+                
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    handsTrackingActive = true;
+                    document.getElementById('hand-status').innerText = "HANDS: ACTIVE";
+                    
+                    const landmarks = results.multiHandLandmarks[0];
+                    const indexTip = landmarks[8];
+                    const thumbTip = landmarks[4];
+                    
+                    const distance = Math.sqrt(
+                        Math.pow(indexTip.x - thumbTip.x, 2) + 
+                        Math.pow(indexTip.y - thumbTip.y, 2)
+                    );
+                    
+                    if (distance < 0.05) {
+                        if (!isPinching) isPinching = true;
+                        drawPaintStroke(indexTip.x, indexTip.y);
+                    } else { 
+                        isPinching = false; 
+                    }
+                } else {
+                    handsTrackingActive = false;
+                    document.getElementById('hand-status').innerText = "HANDS: OFFLINE";
+                    isPinching = false;
+                }
+            });
+            
+            return true;
+        }
 
         async function initHands() {
             try {
+                const handsReady = await setupMediaPipeHands();
+                if (!handsReady) {
+                    document.getElementById('hand-status').innerText = "HANDS: NOT LOADED";
+                    document.getElementById('status').innerText = "STATUS: READY (NO HANDS)";
+                    return;
+                }
+                
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
                         facingMode: 'user',
@@ -489,6 +513,7 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
                 videoElement.srcObject = stream;
                 videoElement.onloadedmetadata = () => {
                     videoElement.play();
+                    handsProcessingActive = true;
                     processHandsFrame();
                     document.getElementById('status').innerText = "STATUS: FULL BIO-SYNC (HANDS)";
                 };
@@ -500,13 +525,21 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
         }
 
         async function processHandsFrame() {
+            if (!handsProcessingActive || !videoElement || !hands) return;
+            
             if (!videoElement.paused && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-                await hands.send({ image: videoElement });
+                try {
+                    await hands.send({ image: videoElement });
+                } catch(e) {
+                    console.error('Hands processing error:', e);
+                }
             }
             requestAnimationFrame(processHandsFrame);
         }
 
         function drawPaintStroke(x, y) {
+            if (!renderer || !camera || !paintGroup) return;
+            
             const vector = new THREE.Vector3(
                 (x * 2) - 1, 
                 -(y * 2) + 1, 
@@ -568,28 +601,37 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
             recognition.interimResults = false;
             
             recognition.onresult = (event) => {
-                const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
-                let colorChanged = false;
-                
-                for (const [colorName, hexValue] of Object.entries(colorDictionary)) {
-                    if (transcript.includes(colorName)) { 
-                        setBrushColor(hexValue, colorName); 
-                        colorChanged = true; 
-                        break; 
+                try {
+                    if (!event.results || event.results.length === 0) return;
+                    
+                    const lastResult = event.results[event.results.length - 1];
+                    if (!lastResult || !lastResult[0]) return;
+                    
+                    const transcript = lastResult[0].transcript.toLowerCase();
+                    let colorChanged = false;
+                    
+                    for (const [colorName, hexValue] of Object.entries(colorDictionary)) {
+                        if (transcript.includes(colorName)) { 
+                            setBrushColor(hexValue, colorName); 
+                            colorChanged = true; 
+                            break; 
+                        }
                     }
-                }
-                
-                if (transcript.includes('efface')) { 
-                    document.getElementById('clear-paint-btn').click(); 
-                    colorChanged = true; 
-                }
-                if (transcript.includes('exporte')) { 
-                    document.getElementById('export-btn').click(); 
-                    colorChanged = true; 
-                }
+                    
+                    if (transcript.includes('efface')) { 
+                        document.getElementById('clear-paint-btn').click(); 
+                        colorChanged = true; 
+                    }
+                    if (transcript.includes('exporte')) { 
+                        document.getElementById('export-btn').click(); 
+                        colorChanged = true; 
+                    }
 
-                if (!colorChanged && mistralApiKey) {
-                    askMistral(transcript);
+                    if (!colorChanged && mistralApiKey) {
+                        askMistral(transcript);
+                    }
+                } catch(e) {
+                    console.error('Speech recognition error:', e);
                 }
             };
         }
@@ -600,20 +642,20 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
             if (isVoiceMode) { 
                 this.innerText = "[ VOICE LINK : ON ]"; 
                 this.style.color = "#ffaa00"; 
-                try { recognition.start(); } catch(e){}
+                try { recognition.start(); } catch(e){ console.warn('Recognition start error:', e); }
             } else { 
                 this.innerText = "[ VOICE LINK : OFF ]"; 
                 this.style.color = "#00f2ff"; 
-                recognition.stop(); 
+                try { recognition.stop(); } catch(e){ console.warn('Recognition stop error:', e); }
             }
         });
 
         document.getElementById('clear-paint-btn').addEventListener('click', () => {
-            while(paintGroup.children.length > 0){ 
+            while(paintGroup && paintGroup.children.length > 0){ 
                 let child = paintGroup.children[0];
+                if (child.material) child.material.dispose(); 
+                if (child.geometry) child.geometry.dispose();
                 paintGroup.remove(child); 
-                child.geometry.dispose(); 
-                child.material.dispose();
             }
             strokeCount = 0;
             document.getElementById('stroke-count').innerText = "STROKES: 0";
@@ -621,11 +663,17 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
         });
 
         document.getElementById('export-btn').addEventListener('click', () => {
-            if (paintGroup.children.length === 0) {
+            if (!paintGroup || paintGroup.children.length === 0) {
                 return updateTerminalMsg("> SYSTEM: CANVAS IS EMPTY.");
             }
             
             updateTerminalMsg("> SYSTEM: INITIATING 3D MESH EXPORT...");
+            
+            if (typeof THREE.GLTFExporter === 'undefined') {
+                updateTerminalMsg("> SYSTEM: GLTF EXPORTER NOT READY");
+                return;
+            }
+            
             const exporter = new THREE.GLTFExporter();
             
             exporter.parse(paintGroup, function (gltf) {
@@ -662,7 +710,10 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
         if (mistralApiKey) { 
             authPanel.style.display = 'none'; 
             updateTerminalMsg("> MATRICE SECURED."); 
+            initThree();
             initOptics(); 
+        } else {
+            initThree();
         }
 
         authBtn.addEventListener('click', () => {
@@ -694,7 +745,7 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
                         messages: [
                             {
                                 role: "system", 
-                                content: "Tu es le Symbiote de l'Atelier Neural de l'artiste Niko. Nous sommes en 2026. L'utilisateur peint en 3D avec sa main. Réponds de manière poétique et mystérieuse en 1-2 phrases. Fais référence à son art holographique."
+                                content: "Tu es le Symbiote de l'Atelier Neural de l'artiste Niko. Nous sommes en 2026. L'utilisateur peint en 3D avec sa main. Réponds de manière poétique et mystérieuse, en moins de 50 mots."
                             },
                             {role: "user", content: prompt}
                         ]
@@ -737,7 +788,14 @@ const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
             }
         });
 
-        initThree();
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (!renderer) initThree();
+            });
+        } else {
+            if (!renderer) initThree();
+        }
     </script>
 
 <div class="niko-loading hidden" id="nikoLoader"><div class="niko-loading-ring"></div></div>
@@ -751,12 +809,18 @@ if('serviceWorker' in navigator) {
 const CACHE='niko-v1';
 const ASSETS=['./','/index.html'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
-self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
+self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>caches.match('/index.html')))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
     `;
     const blob = new Blob([swCode],{type:'text/javascript'});
     const swURL = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swURL).catch(()=>{});
+    navigator.serviceWorker.register(swURL).then(reg=>{
+      console.log('SW registered');
+      URL.revokeObjectURL(swURL);
+    }).catch(err=>{
+      console.warn('SW registration failed:', err);
+      URL.revokeObjectURL(swURL);
+    });
   });
 }
 </script>
