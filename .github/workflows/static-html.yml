@@ -18,6 +18,8 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          from html.parser import HTMLParser
+          import json
           import re
 
           html = Path("index.html").read_text(encoding="utf-8")
@@ -31,5 +33,40 @@ jobs:
                   raise SystemExit(f"Missing {description} in index.html")
           if re.search(r"^(?:<{7} |={7}$|>{7} )", html, re.MULTILINE):
               raise SystemExit("Possible unresolved merge conflict in index.html")
-          print("Static HTML entrypoint verified. Runtime behavior is not tested.")
+          class Metadata(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.lang_count = 0
+                  self.viewport = False
+                  self.in_title = False
+                  self.title_text = []
+
+              def handle_starttag(self, tag, attrs):
+                  if tag == "html":
+                      self.lang_count = sum(1 for key, _ in attrs if key == "lang")
+                  attributes = dict(attrs)
+                  if tag == "meta" and (attributes.get("name") or "").lower() == "viewport":
+                      self.viewport = True
+                  if tag == "title":
+                      self.in_title = True
+
+              def handle_endtag(self, tag):
+                  if tag == "title":
+                      self.in_title = False
+
+              def handle_data(self, data):
+                  if self.in_title:
+                      self.title_text.append(data)
+
+          doc = Metadata()
+          doc.feed(html)
+          assert doc.lang_count == 1, "Expected exactly one HTML lang attribute"
+          assert doc.viewport, "Missing mobile viewport declaration"
+          assert "".join(doc.title_text).strip(), "Empty HTML title"
+          for name in ("manifest.json", "manifest.webmanifest"):
+              manifest = Path(name)
+              if manifest.is_file():
+                  data = json.loads(manifest.read_text(encoding="utf-8"))
+                  assert isinstance(data, dict) and data.get("name"), f"Invalid app name in {name}"
+          print("Static HTML, accessibility metadata and PWA manifests verified. Runtime behavior is not tested.")
           PY
