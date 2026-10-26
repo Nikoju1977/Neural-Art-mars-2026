@@ -1,0 +1,76 @@
+name: Vérification statique du site
+
+on:
+  push:
+    paths:
+      - 'index.html'
+      - 'manifest.json'
+      - 'manifest.webmanifest'
+      - '.github/workflows/static-smoke.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'manifest.json'
+      - 'manifest.webmanifest'
+      - '.github/workflows/static-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  static-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Vérifier le point d'entrée et les manifestes
+        run: |
+          python3 - <<'PY'
+          import json
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          class Page(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.html = False
+                  self.lang_count = 0
+                  self.viewport = False
+                  self.in_title = False
+                  self.title = []
+
+              def handle_starttag(self, tag, attrs):
+                  if tag == "html":
+                      self.html = True
+                      self.lang_count = sum(1 for key, value in attrs if key == "lang")
+                  values = dict(attrs)
+                  if tag == "meta" and (values.get("name") or "").lower() == "viewport":
+                      self.viewport = True
+                  if tag == "title":
+                      self.in_title = True
+
+              def handle_endtag(self, tag):
+                  if tag == "title":
+                      self.in_title = False
+
+              def handle_data(self, data):
+                  if self.in_title:
+                      self.title.append(data)
+
+          page = Path("index.html")
+          assert page.is_file(), "index.html absent"
+          source = page.read_text(encoding="utf-8")
+          assert source.strip(), "index.html vide"
+          inspector = Page()
+          inspector.feed(source)
+          assert inspector.html, "Balise html absente"
+          assert inspector.lang_count == 1, "Une seule langue HTML est requise"
+          assert inspector.viewport, "Meta viewport absente"
+          assert "".join(inspector.title).strip(), "Titre HTML absent"
+          for name in ("manifest.json", "manifest.webmanifest"):
+              manifest = Path(name)
+              if manifest.is_file():
+                  data = json.loads(manifest.read_text(encoding="utf-8"))
+                  assert isinstance(data, dict) and data.get("name"), f"{name} doit définir un nom"
+          print("OK : point d'entrée et manifestes statiques vérifiés.")
+          PY
