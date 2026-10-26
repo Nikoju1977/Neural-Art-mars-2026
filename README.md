@@ -1,4 +1,11 @@
 # 🧠 Neural Art — Mars 2026
+
+## Ce que fait l'application, en pratique
+
+L'atelier **Neural Art** explore la **création d'images dans le navigateur** à l'aide de pinceaux numériques, de calques et d'effets graphiques Canvas/WebGL. Il sert à expérimenter des compositions et des rendus puis à utiliser les possibilités d'export décrites par l'interface.
+
+**Statut :** laboratoire créatif. Les fonctions présentées dans la documentation sont à essayer selon le navigateur et le matériel ; aucune qualité de rendu ou accélération IA mesurée n'est garantie.
+
 **Studio Niko Design** — Moteur de création artistique neurale.
 
 > Application de peinture numérique IA avec système de brosses avancé et rendu WebGL.
