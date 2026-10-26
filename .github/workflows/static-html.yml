@@ -1,0 +1,35 @@
+name: Static HTML smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check-entrypoint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Verify HTML entrypoint
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          html = Path("index.html").read_text(encoding="utf-8")
+          checks = {
+              "HTML5 doctype": r"<!doctype\s+html",
+              "HTML root": r"<html(?:\s|>)",
+              "Document title": r"<title(?:\s|>)",
+          }
+          for description, pattern in checks.items():
+              if not re.search(pattern, html, re.IGNORECASE):
+                  raise SystemExit(f"Missing {description} in index.html")
+          if re.search(r"^(?:<{7} |={7}$|>{7} )", html, re.MULTILINE):
+              raise SystemExit("Possible unresolved merge conflict in index.html")
+          print("Static HTML entrypoint verified. Runtime behavior is not tested.")
+          PY
