@@ -824,5 +824,49 @@ self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.a
   });
 }
 </script>
+<!-- STUDIO NIKO — MODE D'EMPLOI INTÉGRÉ. Conserver ce bloc lors d'une mise à jour. -->
+<style id="studio-niko-guide-style">
+#studio-niko-embedded-guide{all:initial!important;display:block!important;position:fixed!important;z-index:2147483000!important;right:max(12px,env(safe-area-inset-right,0px))!important;bottom:max(12px,env(safe-area-inset-bottom,0px))!important;width:auto!important;height:auto!important;max-width:calc(100vw - 24px)!important;font:13px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;color:#e9f5f4!important;direction:ltr!important}
+#studio-niko-embedded-guide *,#studio-niko-embedded-guide *::before,#studio-niko-embedded-guide *::after{box-sizing:border-box!important}
+#studio-niko-embedded-guide>summary{all:initial!important;display:flex!important;align-items:center!important;gap:9px!important;list-style:none!important;cursor:pointer!important;user-select:none!important;white-space:nowrap!important;border:1px solid #6ea4a8!important;border-radius:999px!important;background:#10303b!important;color:#efffff!important;padding:11px 15px!important;box-shadow:0 8px 35px #0009!important;font:700 12px/1.2 system-ui,sans-serif!important;letter-spacing:.015em!important}
+#studio-niko-embedded-guide>summary::-webkit-details-marker{display:none!important}
+#studio-niko-embedded-guide>summary:focus-visible{outline:3px solid #e9c38e!important;outline-offset:3px!important}
+#studio-niko-embedded-guide>summary .sn-guide-question{display:grid!important;place-items:center!important;width:23px!important;height:23px!important;border-radius:50%!important;background:#c1d9d7!important;color:#15222b!important;font:800 15px system-ui,sans-serif!important}
+#studio-niko-embedded-guide[open]>summary{background:#385363!important}
+#studio-niko-embedded-guide .sn-guide-sheet{all:initial!important;display:block!important;position:absolute!important;bottom:calc(100% + 10px)!important;right:0!important;width:min(405px,calc(100vw - 24px))!important;max-height:min(76vh,680px)!important;overflow-y:auto!important;overscroll-behavior:contain!important;border:1px solid #557e86!important;border-radius:13px!important;background:#0d2130!important;box-shadow:0 30px 100px #000c!important;padding:22px!important;color:#eaf3f4!important;font:13px/1.7 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;text-align:left!important}
+#studio-niko-embedded-guide .sn-guide-caption{display:block!important;font:800 9px/1.6 system-ui,sans-serif!important;letter-spacing:.12em!important;color:#85bdbf!important;margin:0 0 12px!important;text-transform:uppercase!important}
+#studio-niko-embedded-guide h2{all:unset!important;display:block!important;font:750 22px/1.25 system-ui,sans-serif!important;letter-spacing:-.035em!important;color:#fff!important;margin:0 0 12px!important}
+#studio-niko-embedded-guide h3{all:unset!important;display:block!important;font:750 13px/1.4 system-ui,sans-serif!important;color:#b9e1df!important;margin:20px 0 8px!important}
+#studio-niko-embedded-guide p,#studio-niko-embedded-guide li{all:unset!important;display:block!important;font:400 12px/1.8 system-ui,sans-serif!important;color:#c2d3dc!important;margin:0!important}
+#studio-niko-embedded-guide ol{all:unset!important;display:block!important;counter-reset:sn-help-step!important;margin:0!important;padding:0!important}
+#studio-niko-embedded-guide li{counter-increment:sn-help-step!important;display:flex!important;gap:11px!important;margin:9px 0!important}
+#studio-niko-embedded-guide li::before{content:counter(sn-help-step,decimal-leading-zero)!important;color:#98cbc8!important;font:700 11px/1.85 system-ui,sans-serif!important;flex:none!important}
+#studio-niko-embedded-guide .sn-guide-warning{display:block!important;margin-top:15px!important;border-left:3px solid #d6ba8f!important;padding:10px 13px!important;background:#342d29!important;color:#ecdec7!important;font:500 12px/1.7 system-ui,sans-serif!important}
+#studio-niko-embedded-guide .sn-guide-links{display:flex!important;flex-wrap:wrap!important;gap:8px!important;margin-top:18px!important;border-top:1px solid #3e5a68!important;padding-top:14px!important}
+#studio-niko-embedded-guide .sn-guide-links a{all:unset!important;display:inline-block!important;cursor:pointer!important;padding:9px 11px!important;border:1px solid #638f92!important;border-radius:5px!important;color:#def5f4!important;text-decoration:none!important;font:700 11px/1.4 system-ui,sans-serif!important}
+#studio-niko-embedded-guide .sn-guide-links a:hover{background:#254550!important}
+@media(max-width:480px){#studio-niko-embedded-guide .sn-guide-sheet{max-height:calc(100dvh - 115px)!important;padding:18px!important}}
+@media(prefers-reduced-motion:reduce){#studio-niko-embedded-guide *{transition:none!important;animation:none!important}}
+</style>
+<details id="studio-niko-embedded-guide" role="region" aria-label="Mode d'emploi de Neural-Art-mars-2026">
+  <summary><span class="sn-guide-question" aria-hidden="true">?</span> Mode d’emploi</summary>
+  <section class="sn-guide-sheet" aria-labelledby="studio-niko-guide-title">
+    <span class="sn-guide-caption">STUDIO NIKO / GUIDE INTÉGRÉ</span>
+    <h2 id="studio-niko-guide-title">Neural-Art-mars-2026</h2>
+    <p>Laboratoire de peinture numérique et de compositions WebGL.</p>
+    <h3>Premiers pas</h3>
+    <ol><li>Ouvrez l&#39;atelier et vérifiez les autorisations caméra si vous souhaitez les utiliser.</li><li>Choisissez un pinceau ou un mode visuel avant de commencer votre composition.</li><li>Exportez votre création ; les fonctions Mistral nécessitent une clé valide.</li></ol>
+    <h3>Avant de commencer</h3>
+    <p>Les performances varient selon le GPU du téléphone et les autorisations du navigateur.</p>
+    <div class="sn-guide-warning" role="note">La caméra et les appels IA sont conditionnés aux autorisations et à la configuration du service.</div>
+    <h3>En cas de problème</h3>
+    <p>En cas de page vide ou d&#39;erreur : rechargez une fois, vérifiez la connexion et les permissions ; sur une PWA déjà installée, fermez-la puis rouvrez-la pour actualiser son cache. Consultez le dépôt GitHub si le problème persiste.</p>
+    <div class="sn-guide-links">
+      <a href="https://github.com/Nikoju1977/Neural-Art-mars-2026" target="_blank" rel="noopener noreferrer">Documentation et code ↗</a>
+      <a href="https://studio-niko-hub.vercel.app/#catalogue" target="_blank" rel="noopener noreferrer">Studio Niko Hub ↗</a>
+    </div>
+  </section>
+</details>
+<!-- /STUDIO NIKO — MODE D'EMPLOI INTÉGRÉ -->
 </body>
 </html>
