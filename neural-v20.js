@@ -1,4 +1,4 @@
-/* Neural Art V20.4 — Studio Niko — moteur de peinture gestuelle 3D.
+/* Neural Art V20.5 — Studio Niko — moteur de peinture gestuelle 3D.
  * Aucune cle IA necessaire pour dessiner. Three.js et MediaPipe sont charges par index.html.
  */
 (() => {
@@ -21,7 +21,10 @@
     missedFrames: 0, palmX: null, palmY: null, lastInference: 0 };
   let mirrorCamera = true, trackingSensitivity = 1, motionSmoothing = 0.53;
   let gestureRotate = false, cameraStarting = false, cameraErrors = 0;
-  let binCloud = null, importedModel = null;
+  let binCloud = null, importedModel = null, downloadURL = null;
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let lastFrameTime = 0;
   let handAssetsBase = '';
   const HAND_SOURCES = [
     'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/',
@@ -292,11 +295,20 @@
   }
   function saveBlob(blob, filename) {
     if (!blob) { ui('Export impossible.'); return; }
-    const url = URL.createObjectURL(blob);
+    if (downloadURL) URL.revokeObjectURL(downloadURL);
+    downloadURL = URL.createObjectURL(blob);
+    const permanentLink = $('download-link');
+    if (permanentLink) {
+      permanentLink.href = downloadURL;
+      permanentLink.download = filename;
+      permanentLink.textContent = 'Enregistrer : ' + filename;
+      permanentLink.classList.add('visible');
+    }
     const a = document.createElement('a');
-    a.href = url; a.download = filename;
+    a.href = downloadURL; a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    ui(isIOS ? 'Export prêt : appuie sur « Enregistrer » pour sauvegarder depuis Safari.' :
+      'Export prêt. Si le téléchargement ne démarre pas, utilise le lien Enregistrer.');
   }
   function exportPNG() {
     try {
@@ -328,6 +340,10 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
   function renderFrame(time) {
+    if (!renderer || !scene || !camera) return;
+    // Safari iPhone : rendu 3D à 30 i/s maximum pour limiter température et batterie.
+    if (isIOS && !renderer.xr.isPresenting && time-lastFrameTime<32) return;
+    lastFrameTime=time;
     if (background) background.rotation.y = Math.sin(time * .00007) * .22;
     if (renderer.xr.isPresenting) {
       painting.scale.setScalar(.012);
@@ -347,14 +363,17 @@
       scene.background = new THREE.Color(0x01060b);
       camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, .05, 1000);
       camera.position.z = 50;
-      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+      renderer = new THREE.WebGLRenderer({
+        antialias: !isIOS, preserveDrawingBuffer: true,
+        powerPreference: isIOS ? 'default' : 'high-performance'
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isIOS ? 1.25 : 1.6));
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.xr.enabled = true;
       renderer.domElement.id = 'neural-canvas';
       renderer.domElement.setAttribute('aria-label', 'Espace de dessin 3D');
       document.body.insertBefore(renderer.domElement, $('app'));
-      const positions = new Float32Array(2100 * 3);
+      const positions = new Float32Array((isIOS ? 800 : 2100) * 3);
       for (let i = 0; i < positions.length; i++) positions[i] = (Math.random() - .5) * 180;
       const stars = new THREE.BufferGeometry();
       stars.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -467,7 +486,7 @@
     // Cap inference to ~25 fps on mobile and let requestAnimationFrame render
     // fluidly between tracked frames; avoid overlapping inference requests.
     const now = performance.now();
-    if (now - motion.lastInference < 40) {
+    if (now - motion.lastInference < (isIOS ? 68 : 40)) {
       rafCamera = requestAnimationFrame(trackCamera);
       return;
     }
@@ -521,17 +540,34 @@
     try {
       status('STARTING CAMERA');
       video = document.querySelector('.input_video');
-      video.muted = true; video.playsInline = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.autoplay = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+      video.setAttribute('muted', '');
+      video.setAttribute('autoplay', '');
       if (!hands) {
         hands = new Hands({ locateFile: (file) => handAssetsBase + file });
         hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: .55, minTrackingConfidence: .55 });
         hands.onResults(onHandResults);
       }
-      cameraStream = await navigator.mediaDevices.getUserMedia({
-        audio: false, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
-      });
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: 'user', width: {ideal:isIOS?480:640},height:{ideal:480},
+            frameRate:{ideal:isIOS?20:25,max:30} }
+        });
+      } catch (e) {
+        if (['OverconstrainedError','NotFoundError','ConstraintNotSatisfiedError'].includes(e.name)) {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ audio:false,video:true });
+        } else throw e;
+      }
       video.srcObject = cameraStream;
-      await video.play();
+      try { await video.play(); }
+      catch (e) {
+        if (e.name !== 'AbortError') throw e;
+      }
       cameraEnabled = true; tracking = false; cameraErrors=0; resetMotion();
       document.body.classList.add('camera-active');
       if ($('camera-preview')) $('camera-preview').classList.toggle('mirror', mirrorCamera);
@@ -544,7 +580,13 @@
       trackCamera();
     } catch (e) {
       stopCamera();
-      ui('Accès caméra impossible : ' + (e.name === 'NotAllowedError' ? 'autorisation refusée' : e.message));
+      let detail = e.message || e.name || 'Erreur inconnue';
+      if (e.name==='NotAllowedError'||e.name==='PermissionDeniedError')
+        detail='autorisation refusée : autorise la caméra dans les réglages du site Safari';
+      else if (e.name==='NotReadableError')
+        detail='caméra occupée par une autre application : ferme la caméra ou FaceTime';
+      else if (e.name==='NotFoundError') detail='aucune caméra disponible';
+      ui('Accès caméra impossible : '+detail);
     } finally { cameraStarting = false; }
   }
   function installPointer() {
@@ -553,7 +595,8 @@
     layer.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       e.preventDefault(); pointerDown = true;
-      layer.setPointerCapture(e.pointerId);
+      try { layer.setPointerCapture(e.pointerId); }
+      catch(err) { /* Capture facultative : Safari peut la refuser après un geste système. */ }
       const [x,y] = coords(e); endStroke(); startStroke(x,y);
       const cursor=$('touch-cursor');
       if (cursor) { cursor.style.display='block'; cursor.style.left=e.clientX+'px';cursor.style.top=e.clientY+'px'; }
@@ -851,6 +894,40 @@
       }
     });
     window.addEventListener('pagehide', stopCamera);
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) {
+        onResize();
+        status('READY (RETOUR SAFARI)');
+        ui('Atelier réactivé. Relance la caméra si Safari l’a interrompue.');
+      }
+    });
+    document.addEventListener('visibilitychange',()=>{
+      if (document.hidden && cameraEnabled) {
+        stopCamera();
+        ui('Caméra arrêtée lorsque Safari est passé en arrière-plan. Appuie pour relancer.');
+      }
+    });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize',onResize,{passive:true});
+    if ($('compat-test-btn')) $('compat-test-btn').addEventListener('click',()=>{
+      let gl=false;
+      try {
+        const canvas=document.createElement('canvas');
+        gl=!!(canvas.getContext('webgl2')||canvas.getContext('webgl'));
+      } catch(e){}
+      const checks=[
+        'Appareil : '+(isIOS?'iPhone / iPad (WebKit)':'Android / ordinateur'),
+        'Moteur 3D WebGL : '+(gl?'DISPONIBLE':'INDISPONIBLE'),
+        'Rendu Neural Art : '+(renderer?'PRÊT':'EN ERREUR'),
+        'Sélection de fichiers : '+(typeof FileReader!=='undefined'?'DISPONIBLE':'INDISPONIBLE'),
+        'Lecteur GLTF / BIN : '+(window.NeuralArtReaderReady?'CHARGÉ':'NON INITIALISÉ'),
+        'Caméra : '+(navigator.mediaDevices?.getUserMedia?'API DISPONIBLE':'API ABSENTE'),
+        'Suivi de mains : '+(typeof Hands==='function'?'MÉDIAPIPE CHARGÉ':'MÉDIAPIPE À CHARGER'),
+        'Mode voix : '+(recognition?'DISPONIBLE':'NON PRIS EN CHARGE'),
+        'HTTPS : '+(window.isSecureContext?'OUI':'NON')
+      ];
+      $('compat-info').textContent=checks.join('\\n');
+      ui('Diagnostic terminé. La permission caméra est vérifiée lors de l’activation.');
+    });
     // Synchronise les valeurs natives, y compris si le navigateur restaure les champs.
     brushMode=$('brush-mode').value;
     brushSize=clamp(Number($('brush-size').value)||.7,.1,2.5);
@@ -862,7 +939,11 @@
     installPointer();
   }
   function init() {
-    if (!setupThree()) return;
+    const engineReady=setupThree();
+    if (!engineReady) {
+      ui('Le moteur 3D est indisponible. Les outils et l’inspection de fichiers restent accessibles.');
+      return;
+    }
     bindUI();
     try { localStorage.removeItem('niko_mistral_key'); } catch (_) { /* pas de stockage */ }
     ui('Atelier prêt. La zone centrale accepte le doigt ou la souris. Utilise « Test dessin » pour vérifier le rendu.');
