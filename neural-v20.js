@@ -16,6 +16,27 @@
   let pointerDown = false, tracking = false, recognition = null, voiceEnabled = false;
   let mistralKey = '', strokes = [], rafCamera = 0;
   const maxStrokes = 160, maxPointsPerStroke = 140;
+  const motion = { x: 0.5, y: 0.5, lastX: 0.5, lastY: 0.5, lastTs: 0,
+    initialized: false, pinched: false, pinchFrames: 0, releaseFrames: 0,
+    missedFrames: 0, palmX: null, palmY: null, lastInference: 0 };
+  let mirrorCamera = true, trackingSensitivity = 1, motionSmoothing = 0.53;
+  let gestureRotate = false, cameraStarting = false;
+  function resetMotion() {
+    motion.initialized = false; motion.pinched = false;
+    motion.pinchFrames = 0; motion.releaseFrames = 0;
+    motion.missedFrames = 0; motion.lastTs = 0;
+    motion.palmX = null; motion.palmY = null;
+    const cursor = $('hand-cursor');
+    if (cursor) cursor.hidden = true;
+  }
+  function showHandCursor(x, y, drawing) {
+    const cursor = $('hand-cursor');
+    if (!cursor) return;
+    cursor.hidden = false;
+    cursor.style.left = (x * 100) + '%';
+    cursor.style.top = (y * 100) + '%';
+    cursor.classList.toggle('drawing', drawing);
+  }
 
   function setStatusHands(text) { if ($('hand-status')) $('hand-status').textContent = 'HANDS: ' + text; }
   function updateCount() { if ($('stroke-count')) $('stroke-count').textContent = 'STROKES: ' + strokes.length; }
@@ -202,20 +223,83 @@
       return false;
     }
   }
+  // Adaptive hysteresis + speed-dependent temporal smoothing. Distance relative
+  // to palm width avoids a fixed pixel threshold across near/far hands.
   function onHandResults(result) {
-    if (!cameraEnabled || renderer.xr.isPresenting || pointerDown) return;
+    if (!cameraEnabled || renderer.xr.isPresenting || pointerDown) {
+      resetMotion(); return;
+    }
     const found = result.multiHandLandmarks && result.multiHandLandmarks[0];
-    tracking = Boolean(found);
-    setStatusHands(found ? 'ACTIVE' : 'SEARCHING');
-    if (!found) { endStroke(); return; }
-    const index = found[8], thumb = found[4];
-    const distance = Math.hypot(index.x - thumb.x, index.y - thumb.y);
-    if (distance < .058) moveStroke(1 - index.x, index.y);
-    else endStroke();
+    if (!found) {
+      motion.missedFrames += 1;
+      if (motion.missedFrames >= 3) {
+        endStroke(); resetMotion(); setStatusHands('SEARCHING');
+      }
+      return;
+    }
+    motion.missedFrames = 0;
+    const tip = found[8], thumb = found[4], indexRoot = found[5], pinkyRoot = found[17];
+    if (![tip, thumb, indexRoot, pinkyRoot].every(p =>
+      Number.isFinite(p.x) && Number.isFinite(p.y))) return;
+    const width = Math.max(.045, Math.hypot(indexRoot.x - pinkyRoot.x, indexRoot.y - pinkyRoot.y));
+    const pinchRatio = Math.hypot(tip.x - thumb.x, tip.y - thumb.y) / width;
+    const enterThreshold = .38 * trackingSensitivity;
+    const exitThreshold = .57 * trackingSensitivity;
+    if (!motion.pinched) {
+      motion.pinchFrames = pinchRatio < enterThreshold ? motion.pinchFrames + 1 : 0;
+      if (motion.pinchFrames >= 2) {
+        motion.pinched = true; motion.releaseFrames = 0;
+      }
+    } else {
+      motion.releaseFrames = pinchRatio > exitThreshold ? motion.releaseFrames + 1 : 0;
+      if (motion.releaseFrames >= 2) {
+        motion.pinched = false; motion.pinchFrames = 0; endStroke();
+      }
+    }
+    const rawX = clamp(mirrorCamera ? 1 - tip.x : tip.x, 0, 1);
+    const rawY = clamp(tip.y, 0, 1);
+    const now = performance.now();
+    const dt = clamp(now - (motion.lastTs || now - 33), 10, 100);
+    const dist = Math.hypot(rawX - motion.x, rawY - motion.y);
+    const speed = dist / (dt / 1000);
+    const alpha = motion.initialized ?
+      clamp(motionSmoothing * .52 + speed * .075, .14, .85) : 1;
+    motion.x += alpha * (rawX - motion.x);
+    motion.y += alpha * (rawY - motion.y);
+    motion.lastTs = now; motion.initialized = true;
+    showHandCursor(motion.x, motion.y, motion.pinched);
+    if (motion.pinched) {
+      motion.palmX = null; motion.palmY = null;
+      moveStroke(motion.x, motion.y);
+      setStatusHands('DRAWING');
+    } else {
+      endStroke();
+      // Optional navigation: moving the open hand orbits the 3D sculpture.
+      if (gestureRotate) {
+        const palm = found[9];
+        const px = mirrorCamera ? 1 - palm.x : palm.x, py = palm.y;
+        if (motion.palmX !== null && motion.palmY !== null) {
+          const dx = clamp(px - motion.palmX, -.10, .10);
+          const dy = clamp(py - motion.palmY, -.10, .10);
+          painting.rotation.y += dx * 3;
+          painting.rotation.x += dy * 3;
+        }
+        motion.palmX = px; motion.palmY = py;
+      }
+      setStatusHands(gestureRotate ? 'ROTATE / READY' : 'TRACKING');
+    }
   }
   async function trackCamera() {
     if (!cameraEnabled || processing || !hands || !video) return;
     if (video.readyState < 2) { rafCamera = requestAnimationFrame(trackCamera); return; }
+    // Cap inference to ~25 fps on mobile and let requestAnimationFrame render
+    // fluidly between tracked frames; avoid overlapping inference requests.
+    const now = performance.now();
+    if (now - motion.lastInference < 40) {
+      rafCamera = requestAnimationFrame(trackCamera);
+      return;
+    }
+    motion.lastInference = now;
     processing = true;
     try { await hands.send({ image: video }); }
     catch (e) { console.warn('MediaPipe error', e); setStatusHands('ERROR'); }
@@ -230,15 +314,17 @@
     if (cameraStream) cameraStream.getTracks().forEach((t) => t.stop());
     cameraStream = null;
     if (video) { video.pause(); video.srcObject = null; }
-    endStroke(); tracking = false;
+    endStroke(); tracking = false; resetMotion();
     setStatusHands('OFFLINE');
     $('camera-btn').textContent = 'Activer la caméra';
     status('READY (CAMERA OFF)');
   }
   async function toggleCamera() {
     if (cameraEnabled) { stopCamera(); ui('Caméra arrêtée.'); return; }
-    if (typeof Hands === 'undefined') { ui('MediaPipe non chargé. Vérifie Internet.'); return; }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { ui('Caméra indisponible sur ce navigateur.'); return; }
+    if (cameraStarting) return;
+    cameraStarting = true;
+    if (typeof Hands === 'undefined') { cameraStarting = false; ui('MediaPipe non chargé. Vérifie Internet.'); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { cameraStarting = false; ui('Caméra indisponible sur ce navigateur.'); return; }
     try {
       status('STARTING CAMERA');
       video = document.querySelector('.input_video');
@@ -246,7 +332,7 @@
       if (!hands) {
         hands = new Hands({ locateFile: (file) =>
           'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/' + file });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: .6, minTrackingConfidence: .6 });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: .65, minTrackingConfidence: .65 });
         hands.onResults(onHandResults);
       }
       cameraStream = await navigator.mediaDevices.getUserMedia({
@@ -254,7 +340,7 @@
       });
       video.srcObject = cameraStream;
       await video.play();
-      cameraEnabled = true; tracking = false;
+      cameraEnabled = true; tracking = false; resetMotion();
       $('camera-btn').textContent = 'Arrêter la caméra';
       status('CAMERA READY');
       ui('Rapproche le pouce et l’index pour peindre. Écarte-les pour arrêter le tracé.');
@@ -262,7 +348,7 @@
     } catch (e) {
       stopCamera();
       ui('Accès caméra impossible : ' + (e.name === 'NotAllowedError' ? 'autorisation refusée' : e.message));
-    }
+    } finally { cameraStarting = false; }
   }
   function installPointer() {
     const layer = $('interaction-layer');
@@ -337,6 +423,24 @@
   }
   function bindUI() {
     $('camera-btn').addEventListener('click', toggleCamera);
+    $('mirror-toggle').addEventListener('change', (e) => {
+      mirrorCamera = e.target.checked; resetMotion();
+      ui(mirrorCamera ? 'Caméra en miroir.' : 'Caméra sans miroir.');
+    });
+    $('gesture-rotate').addEventListener('change', (e) => {
+      gestureRotate = e.target.checked; motion.palmX = null; motion.palmY = null;
+    });
+    $('tracking-sensitivity').addEventListener('input', (e) => {
+      trackingSensitivity = clamp(Number(e.target.value), .7, 1.5);
+      $('sensitivity-value').textContent = trackingSensitivity.toFixed(2);
+    });
+    $('motion-smoothing').addEventListener('input', (e) => {
+      motionSmoothing = clamp(Number(e.target.value), .25, 1);
+      $('smoothing-value').textContent = motionSmoothing.toFixed(2);
+    });
+    $('reset-view').addEventListener('click', () => {
+      painting.rotation.set(0, 0, 0); ui('Rotation 3D réinitialisée.');
+    });
     $('clear-paint-btn').addEventListener('click', clear);
     $('undo-btn').addEventListener('click', undo);
     $('export-btn').addEventListener('click', exportGLTF);
