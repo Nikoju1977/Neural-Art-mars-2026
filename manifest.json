@@ -1,8 +1,8 @@
 {
-  "name": "Neural Art V20 — Studio Niko",
+  "name": "Neural Art V20.5 — Studio Niko",
   "short_name": "Neural Art",
-  "description": "Atelier de peinture holographique 3D gestuelle et tactile",
-  "start_url": "./",
+  "description": "Atelier 3D gestuel et tactile, compatible Safari iPhone et Android",
+  "start_url": "./?v=20.5",
   "scope": "./",
   "display": "standalone",
   "background_color": "#01060b",
