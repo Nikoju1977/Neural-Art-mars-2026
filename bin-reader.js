@@ -1,4 +1,4 @@
-/* Neural Art BIN Reader v20.3 — traitement local, sans upload */
+/* Neural Art Multi-format Reader v20.4 — traitement local, sans upload */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -6,7 +6,7 @@
   const MAX_NATIVE_JSON = 8 * 1024 * 1024;
   const PREVIEW_BYTES = 512;
   const MAX_POINTS = 15000;
-  let activeBuffer = null, activeName = '', activeNative = null;
+  let activeBuffer = null, activeName = '', activeNative = null, activeGLTF = false, selectionSequence = 0;
   const enc = new TextEncoder(), dec = new TextDecoder('utf-8',{fatal:false});
   const formats = {
     f32le:{bytes:4,read:(v,p)=>v.getFloat32(p,true)},
@@ -27,7 +27,14 @@
     const ascii = Array.from(bytes.subarray(0,Math.min(bytes.length,12)),v => v>=32&&v<127?String.fromCharCode(v):'.').join('');
     const head = dec.decode(bytes.subarray(0,Math.min(bytes.length,8)));
     if (head === 'NARTBIN1') return 'Neural Art BIN v1 (œuvre 3D réimportable)';
-    if (ascii.startsWith('glTF')) return 'GLB / glTF binaire (format distinct du BIN Neural Art)';
+    if (ascii.startsWith('glTF')) return 'GLB : scène 3D glTF binaire';
+    if (bytes.length>24 && bytes[0]===123) {
+      try {
+        const lead=dec.decode(bytes.subarray(0,Math.min(bytes.length,4096)));
+        if (/["']?asset["']?\s*:\s*\{/.test(lead) && /"version"\s*:\s*"2\.0"/.test(lead))
+          return 'GLTF 2.0 : scène 3D JSON';
+      } catch(_) { /* données non textuelles */ }
+    }
     if (ascii.startsWith('PK')) return 'ZIP ou archive compatible ZIP';
     if (ascii.startsWith('RIFF')) return 'Conteneur RIFF (ex. WAV ou AVI)';
     if (ascii.startsWith('%PDF')) return 'Document PDF';
@@ -58,9 +65,11 @@
     return payload;
   }
   async function loadFile(file) {
-    activeBuffer=null;activeNative=null;activeName='';
+    const seq=++selectionSequence;
+    activeBuffer=null;activeNative=null;activeGLTF=false;activeName='';
     $('bin-load-scene').disabled=true;
     $('bin-points').disabled=true;
+    if ($('bin-load-gltf')) $('bin-load-gltf').disabled=true;
     $('bin-report').textContent='Lecture du fichier…';
     $('bin-hex').textContent='…';
     if (!file) { $('bin-report').textContent='Aucun fichier sélectionné.'; return; }
@@ -76,10 +85,16 @@
     }
     try {
       const buffer=await file.arrayBuffer();
-      if ($('bin-file').files[0] !== file) return;
+      if (seq!==selectionSequence) return;
       activeBuffer=buffer;activeName=file.name;
       const bytes=new Uint8Array(buffer);
-      const kind=magic(bytes);
+      let kind=magic(bytes);
+      if (/\.gltf$/i.test(file.name) && kind.startsWith('Binaire générique')) {
+        try {
+          const data=JSON.parse(dec.decode(bytes));
+          if (data?.asset?.version==='2.0') kind='GLTF 2.0 : scène 3D JSON';
+        } catch(e) { /* fichier invalide identifié dans l'import */ }
+      }
       const preview=bytes.subarray(0,PREVIEW_BYTES);
       $('bin-hex').textContent=hexDump(preview);
       const printable=bytes.subarray(0,Math.min(bytes.length,4096)).filter(b=>b>=32&&b<=126).length;
@@ -91,7 +106,11 @@
         'Octets texte ASCII imprimables : '+ratio+' % (échantillon)',
         'Aperçu : '+Math.min(file.size,PREVIEW_BYTES)+' octets / '+file.size
       ];
-      if (kind.startsWith('Neural Art')) {
+      if (kind.startsWith('GLTF') || kind.startsWith('GLB')) {
+        activeGLTF=true;
+        if ($('bin-load-gltf')) $('bin-load-gltf').disabled=false;
+        message('Fichier 3D reconnu. Chargement du modèle dans la scène…');
+      } else if (kind.startsWith('Neural Art')) {
         try {
           activeNative=parseNative(buffer);
           $('bin-load-scene').disabled=false;
@@ -102,14 +121,32 @@
           lines.push('Erreur : '+e.message);
         }
       } else {
-        if (file.size >= 3) $('bin-points').disabled=false;
+        if (file.size >= 3 && !/\.(gltf|glb)$/i.test(file.name)) $('bin-points').disabled=false;
         message('Fichier lu. Aperçu hexadécimal prêt. Pour les données XYZ, choisis le type, l’offset et le stride.');
       }
       $('bin-report').textContent=lines.join('\n');
+      if (activeGLTF && seq===selectionSequence) await importGLTF(seq,true);
     } catch(e) {
       activeBuffer=null;
       $('bin-report').textContent='Échec de lecture.';
       message('Impossible de lire le fichier : '+e.message,true);
+    }
+  }
+  async function importGLTF(seq=selectionSequence, auto=false) {
+    try {
+      if (!activeGLTF || !activeBuffer) throw new Error('Choisis un fichier .gltf ou .glb valide.');
+      if (!window.NeuralArtBIN || !window.NeuralArtBIN.importGLTF)
+        throw new Error('Moteur 3D indisponible. Actualise la page.');
+      message('Import du modèle 3D en cours…');
+      const info=await window.NeuralArtBIN.importGLTF(activeBuffer,activeName);
+      if (seq!==selectionSequence) return;
+      message('Modèle 3D affiché : '+info.name+' · dimensions '+info.dimensions.join(' × ')+'.');
+      if ($('mode-status')) $('mode-status').textContent='MODE: MODELE 3D';
+      // Fermer uniquement le panneau et laisser l’artiste voir l’œuvre importée.
+      if (auto && $('tools-open')) $('tools-open').checked=false;
+      const binPanel=$('bin-reader'); if (auto && binPanel) binPanel.open=false;
+    } catch(e) {
+      if (seq===selectionSequence) message('Import 3D impossible : '+e.message,true);
     }
   }
   function saveBuffer(bytes,name) {
@@ -179,6 +216,9 @@
   function initialize() {
     const file=$('bin-file');
     if (!file) return;
+    window.NeuralArtReaderReady=true;
+    message('Lecteur prêt : ouvre un GLTF, GLB ou BIN. Les modèles GLTF compatibles s’affichent automatiquement.');
+    file.addEventListener('click',()=>{file.value='';});
     file.addEventListener('change',()=>{const details=$('bin-reader'); if(details) details.open=true;loadFile(file.files&&file.files[0]);});
     $('bin-format').addEventListener('change',()=>{
       $('bin-stride').value=3*formats[$('bin-format').value].bytes;
@@ -192,6 +232,13 @@
       const button=$(id);
       if(button) button.addEventListener('click',openPicker);
     }
+    if ($('bin-load-gltf')) $('bin-load-gltf').addEventListener('click',()=>importGLTF());
+    if ($('bin-remove-gltf')) $('bin-remove-gltf').addEventListener('click',()=>{
+      if (window.NeuralArtBIN?.removeGLTF) {
+        window.NeuralArtBIN.removeGLTF();
+        message('Modèle GLTF retiré de la scène.');
+      } else message('Moteur 3D indisponible.',true);
+    });
     $('bin-export').addEventListener('click',exportNative);
     $('bin-load-scene').addEventListener('click',importNative);
     $('bin-points').addEventListener('click',showPoints);
