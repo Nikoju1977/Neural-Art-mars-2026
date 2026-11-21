@@ -1,7 +1,7 @@
 /* Neural Art V20 — local application shell cache.
    External 3D/hand libraries require an Internet connection. */
-const CACHE = 'neural-art-v20-2';
-const LOCAL_ASSETS = ['./', './index.html', './neural-v20.js?v=20.2', './manifest.json', './icon.svg'];
+const CACHE = 'neural-art-v20-3';
+const LOCAL_ASSETS = ['./', './index.html', './neural-v20.js?v=20.3', './bin-reader.js?v=20.3', './manifest.json', './icon.svg'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE)
     .then((cache) => cache.addAll(LOCAL_ASSETS))
