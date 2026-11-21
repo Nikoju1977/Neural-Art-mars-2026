@@ -1,4 +1,4 @@
-/* Neural Art V20.2 — Studio Niko — moteur de peinture gestuelle 3D.
+/* Neural Art V20.3 — Studio Niko — moteur de peinture gestuelle 3D.
  * Aucune cle IA necessaire pour dessiner. Three.js et MediaPipe sont charges par index.html.
  */
 (() => {
@@ -21,6 +21,7 @@
     missedFrames: 0, palmX: null, palmY: null, lastInference: 0 };
   let mirrorCamera = true, trackingSensitivity = 1, motionSmoothing = 0.53;
   let gestureRotate = false, cameraStarting = false, cameraErrors = 0;
+  let binCloud = null;
   let handAssetsBase = '';
   const HAND_SOURCES = [
     'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/',
@@ -281,6 +282,7 @@
     ui(stroke ? 'Dernier tracé annulé.' : 'Aucun tracé à annuler.');
   }
   function clear() {
+    removeBinCloud();
     endStroke();
     for (const stroke of strokes) { painting.remove(stroke.mesh); safeDispose(stroke.mesh); }
     strokes = [];
@@ -624,17 +626,100 @@
       catch (e) { ui('Commande vocale indisponible : ' + e.message); }
     });
   }
+  function removeBinCloud() {
+    if (binCloud && painting) {
+      painting.remove(binCloud);
+      safeDispose(binCloud);
+      binCloud = null;
+    }
+  }
+  function getBinScene() {
+    if (!painting) throw new Error('Moteur 3D non démarré.');
+    endStroke();
+    if (!strokes.length) throw new Error('Dessine une œuvre avant de l’exporter au format BIN.');
+    return {
+      format: 'neural-art-binary', version: 1,
+      rotation: painting.rotation.toArray().slice(0, 3),
+      strokes: strokes.map(s => ({
+        mode: s.mode,
+        size: s.size,
+        color: '#' + s.mesh.material.color.getHexString(),
+        points: s.points.map(p => [p.x,p.y,p.z])
+      }))
+    };
+  }
+  function loadBinScene(payload) {
+    if (!painting || typeof THREE === 'undefined') throw new Error('Moteur 3D indisponible : réessaie après rechargement.');
+    if (!payload || payload.format !== 'neural-art-binary' || payload.version !== 1)
+      throw new Error('Fichier non compatible avec les œuvres Neural Art BIN v1.');
+    if (!Array.isArray(payload.strokes) || !payload.strokes.length || payload.strokes.length > maxStrokes)
+      throw new Error('Nombre de tracés invalide (maximum ' + maxStrokes + ').');
+    const validated = payload.strokes.map((s,i) => {
+      if (!['neon','filament','sculpture'].includes(s.mode)) throw new Error('Type de pinceau invalide (tracé ' + i + ').');
+      if (!/^#[a-fA-F0-9]{6}$/.test(s.color)) throw new Error('Couleur invalide (tracé ' + i + ').');
+      const size = Number(s.size);
+      if (!Number.isFinite(size) || size < .1 || size > 2.5) throw new Error('Épaisseur invalide (tracé ' + i + ').');
+      if (!Array.isArray(s.points) || !s.points.length || s.points.length > maxPointsPerStroke)
+        throw new Error('Nombre de points invalide (tracé ' + i + ').');
+      const pts=s.points.map((p) => {
+        if (!Array.isArray(p) || p.length !== 3 || !p.every(v=>typeof v==='number' && Number.isFinite(v) && Math.abs(v)<1e6))
+          throw new Error('Coordonnées 3D invalides (tracé ' + i + ').');
+        return new THREE.Vector3(p[0],p[1],p[2]);
+      });
+      return {mode:s.mode,size,color:s.color,pts};
+    });
+    const rotation=Array.isArray(payload.rotation)&&payload.rotation.length===3&&payload.rotation.every(v=>typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<1000)?payload.rotation:[0,0,0];
+    clear();
+    for (const item of validated) {
+      const material=makeMaterial(item.mode,item.color);
+      const mesh=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.06,item.size*.28),8,6),material);
+      mesh.position.copy(item.pts[0]);
+      painting.add(mesh);
+      const stroke={mesh,points:item.pts,mode:item.mode,size:item.size,lastRender:0};
+      strokes.push(stroke);
+      refreshStroke(stroke);
+    }
+    painting.rotation.set(...rotation);
+    updateCount();
+    ui('Œuvre BIN restaurée : '+strokes.length+' tracés.');
+    return strokes.length;
+  }
+  function showBinXYZ(coordinates) {
+    if (!painting || typeof THREE === 'undefined') throw new Error('Moteur 3D indisponible.');
+    if (!Array.isArray(coordinates) || coordinates.length < 1 || coordinates.length > 15000)
+      throw new Error('Le nuage doit contenir entre 1 et 15 000 points.');
+    const sums=[0,0,0],mins=[Infinity,Infinity,Infinity],maxs=[-Infinity,-Infinity,-Infinity];
+    for (const p of coordinates) {
+      if (!Array.isArray(p) || p.length!==3 || p.some(v=>!Number.isFinite(v)||Math.abs(v)>1e12)) throw new Error('Coordonnées 3D invalides.');
+      for (let i=0;i<3;i++) { mins[i]=Math.min(mins[i],p[i]);maxs[i]=Math.max(maxs[i],p[i]); }
+    }
+    const center=mins.map((v,i)=>(v+maxs[i])/2);
+    const largest=Math.max(...mins.map((v,i)=>maxs[i]-v),1e-10);
+    const scale=26/largest;
+    const pos=new Float32Array(coordinates.length*3);
+    for (let j=0;j<coordinates.length;j++)for(let i=0;i<3;i++)pos[j*3+i]=(coordinates[j][i]-center[i])*scale;
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    const material=new THREE.PointsMaterial({color:brushColor,size:.42,transparent:true,opacity:.96,sizeAttenuation:true,depthWrite:false});
+    removeBinCloud();
+    binCloud=new THREE.Points(geometry,material);
+    binCloud.name='NeuralArt-BIN-XYZ';
+    painting.add(binCloud);
+    updateCount();
+    ui(coordinates.length+' points BIN affichés en 3D (normalisés et centrés).');
+    return coordinates.length;
+  }
+  window.NeuralArtBIN = Object.freeze({
+    exportScene:getBinScene,
+    importScene:loadBinScene,
+    showXYZ:showBinXYZ,
+    removeXYZ:removeBinCloud
+  });
   function bindUI() {
     $('camera-btn').addEventListener('click', toggleCamera);
     if ($('camera-quick')) $('camera-quick').addEventListener('click', toggleCamera);
     if ($('test-btn')) $('test-btn').addEventListener('click', drawDemo);
     if ($('test-quick')) $('test-quick').addEventListener('click', drawDemo);
-    if ($('tools-toggle')) $('tools-toggle').addEventListener('click', () => {
-      const hud=$('hud'), toggle=$('tools-toggle');
-      const visible=hud.classList.toggle('expanded');
-      toggle.setAttribute('aria-expanded',String(visible));
-      toggle.textContent=visible ? 'Fermer les outils ▴' : 'Outils ▾';
-    });
     $('mirror-toggle').addEventListener('change', (e) => {
       mirrorCamera = e.target.checked; resetMotion();
       if ($('camera-preview')) $('camera-preview').classList.toggle('mirror', mirrorCamera);
