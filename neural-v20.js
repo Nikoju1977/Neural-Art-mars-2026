@@ -706,25 +706,47 @@
     }
     throw new Error('Le module glTF est inaccessible. Vérifie la connexion puis réessaie.');
   }
-  async function importGLTF3D(arrayBuffer,filename='modele.gltf') {
+  async function importGLTF3D(arrayBuffer,filename='modele.gltf',resources={}) {
     if (!painting || !renderer || typeof THREE === 'undefined') throw new Error('Moteur WebGL non prêt.');
     if (!(arrayBuffer instanceof ArrayBuffer) || !arrayBuffer.byteLength) throw new Error('Fichier vide ou non lisible.');
     if (arrayBuffer.byteLength>32*1024*1024) throw new Error('Limite : 32 Mo par modèle pour préserver la mémoire.');
     await ensureGLTFLoader();
     const isGLB=arrayBuffer.byteLength>=4 && new DataView(arrayBuffer).getUint32(0,true)===0x46546c67;
     const contents=isGLB ? arrayBuffer : new TextDecoder().decode(new Uint8Array(arrayBuffer));
+    const resourceURLs=[];
+    const manager=new THREE.LoadingManager();
+    const getResource=(path)=>{
+      const clean=decodeURIComponent(path.split(/[?#]/)[0]).replace(/^\.\//,'');
+      const basename=clean.split('/').pop().toLowerCase();
+      const file=resources[clean.toLowerCase()]||resources[basename];
+      if (!file) throw new Error('Fichier annexe manquant : '+clean+' (sélectionne GLTF + BIN/textures ensemble).');
+      return file;
+    };
     if (!isGLB) {
       let json;
       try{json=JSON.parse(contents);}catch(e){throw new Error('Fichier GLTF JSON invalide.');}
       if (json.asset?.version !== '2.0') throw new Error('Ce lecteur prend en charge glTF 2.0.');
-      if ((json.buffers||[]).some(b=>b.uri && !b.uri.startsWith('data:'))||
-          (json.images||[]).some(i=>i.uri && !i.uri.startsWith('data:')))
-        throw new Error('Le GLTF référence des fichiers séparés (.bin/textures). Utilise un GLB autonome ou un GLTF avec données intégrées.');
+      const external=[...(json.buffers||[]),...(json.images||[])]
+        .map(x=>x.uri).filter(x=>x&&!x.startsWith('data:'));
+      external.forEach(getResource);
+      manager.setURLModifier(url=>{
+        if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+        const file=getResource(url);
+        const objectURL=URL.createObjectURL(file);
+        resourceURLs.push(objectURL);
+        return objectURL;
+      });
     }
-    const asset=await new Promise((resolve,reject)=>{
-      try { new THREE.GLTFLoader().parse(contents,'',resolve,reject); }
-      catch(e){reject(e);}
-    });
+    let asset;
+    try {
+      asset=await new Promise((resolve,reject)=>{
+        try { new THREE.GLTFLoader(manager).parse(contents,'',resolve,reject); }
+        catch(e){reject(e);}
+      });
+    } finally {
+      // Safari WebKit : conserver les blobs pendant le chargement asynchrone uniquement.
+      resourceURLs.forEach(url=>URL.revokeObjectURL(url));
+    }
     const group=asset && asset.scene;
     if (!group) throw new Error('Le fichier ne contient aucune scène glTF.');
     group.updateMatrixWorld(true);
