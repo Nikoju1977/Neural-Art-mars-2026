@@ -244,11 +244,12 @@
             <input id="bin-file" type="file" multiple accept=".gltf,.glb,.bin,.raw,.dat,model/gltf+json,model/gltf-binary,application/octet-stream">
           </label>
           <div id="bin-message" role="status" aria-live="polite">Initialisation du lecteur GLTF / GLB / BIN…</div>
-          <p class="hint"><strong>Pour revoir tes créations :</strong> choisis un fichier Neural-Art-*.gltf. Il doit s’afficher automatiquement dans l’espace 3D.</p>
+          <p class="hint"><strong>Pour revoir tes créations :</strong> ouvre un fichier Neural-Art-*.gltf ou *.glb. Un GLTF et son .bin externe peuvent être sélectionnés ensemble.</p>
           <pre id="bin-report">Aucun fichier sélectionné.</pre>
           <p class="hint">Aperçu des 512 premiers octets. Les fichiers GLTF 2.0 autonomes sont chargés en 3D ; les BIN génériques restent inspectables.</p>
           <pre id="bin-hex" aria-label="Contenu hexadécimal du fichier">—</pre>
           <div class="bin-actions">
+            <a id="bin-download-link" href="#" download style="display:none;grid-column:1/-1;background:#07627a;border:1px solid #58e4ee;border-radius:8px;padding:12px;color:#fff;text-align:center;font-weight:700;">Enregistrer mon fichier BIN</a>
             <button class="action primary" id="bin-load-gltf" type="button" disabled>Afficher le modèle GLTF / GLB</button>
             <button class="action" id="bin-export" type="button">Exporter œuvre BIN</button>
             <button class="action" id="bin-load-scene" type="button" disabled>Restaurer œuvre BIN</button>
@@ -277,6 +278,7 @@
       <details class="settings" id="studio-help">
         <summary>Mode d'emploi</summary>
         <p><strong>Sans caméra :</strong> dessine avec ton doigt sur l'écran ou avec la souris.</p>
+        <p><strong>iPhone Safari :</strong> utilise « Choisir un fichier » puis « Parcourir ». Sélectionne dans « Sur mon iPhone » ou iCloud Drive, et enregistre les exports avec le lien prévu. Autorise la caméra lors de la première activation.</p>
         <p><strong>Avec caméra :</strong> autorise la caméra frontale, puis rapproche pouce et index pour peindre. Le suivi lisse les tremblements et ajuste la sensibilité à la taille de ta main.</p>
         <p><strong>Mouvements :</strong> active « Main ouverte : rotation » pour orienter l'œuvre en déplaçant la paume sans pincer.</p>
         <p><strong>Exports :</strong> PNG pour une image, GLTF pour réutiliser les objets 3D dans Blender. Les commandes vocales peuvent changer la couleur, effacer, annuler ou exporter.</p>
