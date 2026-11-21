@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#041017">
-  <meta name="description" content="Neural Art V20 Studio Niko : peinture gestuelle et tactile 3D gratuite, tracés fluides, export PNG et GLTF, caméra MediaPipe et voix optionnelles.">
+  <meta name="description" content="Neural Art V20.2 Studio Niko : peinture gestuelle et tactile 3D gratuite, tracés fluides, export PNG et GLTF, caméra MediaPipe et voix optionnelles.">
   <meta property="og:title" content="Neural Art V20 | Studio Niko">
   <meta property="og:description" content="Atelier de peinture holographique gestuelle en 3D — gratuit sans clé IA.">
   <meta property="og:type" content="website">
-  <title>NEURAL ART V20 — STUDIO NIKO</title>
+  <title>NEURAL ART V20.2 — STUDIO NIKO</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <style>
@@ -74,27 +74,65 @@
       #chat-log { max-height:36px; font-size:11px; }
       button.action { padding:8px 5px; font-size:11px; }
     }
+    .mobile-actions { display:none; gap:7px; margin-top:8px; }
+    .mobile-actions button { flex:1; min-width:0; }
+    #hud-controls { display:block; }
+    #stage-guide { position:absolute; top:49%; left:50%; transform:translate(-50%,-50%); width:min(78vw,330px); padding:18px; border:1px dashed #3b9eb1; border-radius:19px; color:#dcfbff; background:rgba(4,22,33,.7); text-align:center; box-shadow:0 0 36px #01ecff16; font-size:15px; pointer-events:none; }
+    #stage-guide strong { display:block; font-size:19px; margin-bottom:6px; }
+    #stage-guide .guide-small { display:block; color:#98c8d1; margin-top:6px; font-size:12px; }
+    body.has-art #stage-guide { display:none; }
+    #touch-cursor { display:none; position:fixed; width:22px; height:22px; border:2px solid #eaffff; border-radius:50%; box-shadow:0 0 0 6px #00dff633,0 0 15px #00e3ff; pointer-events:none; z-index:4; transform:translate(-50%,-50%); }
+    #camera-preview { display:none; position:fixed; right:12px; bottom:125px; z-index:4; width:143px; border:1px solid #20c9df; border-radius:12px; padding:4px; background:#061723; box-shadow:0 6px 28px #000b; pointer-events:none; }
+    body.camera-active #camera-preview { display:block; }
+    #camera-preview .preview-picture { position:relative; width:100%; aspect-ratio:4/3; background:#02080e; overflow:hidden; border-radius:7px; }
+    #camera-preview .input_video,#preview-landmarks { position:absolute; inset:0; display:block!important; width:100%; height:100%; object-fit:contain; }
+    #camera-preview.mirror .input_video,#camera-preview.mirror #preview-landmarks { transform:scaleX(-1); }
+    #preview-landmarks { background:transparent; }
+    #camera-preview .preview-caption { font-size:10px; text-align:center; color:#a9e9f2; padding:4px 0 1px; }
+    @media(max-width:600px) {
+      #hud { width:min(350px,calc(100vw - 24px)); max-height:calc(100dvh - 160px); }
+      .mobile-actions { display:flex; }
+      #hud-controls { display:none; border-top:1px solid #28546a; padding-top:10px; margin-top:9px; }
+      #hud.expanded #hud-controls { display:block; }
+      #hud .status-bar { margin-bottom:0; }
+      #hud.expanded .status-bar { margin-bottom:9px; }
+      #camera-preview { bottom:103px; right:10px; width:112px; }
+      #ai-terminal { width:min(350px,calc(100vw - 24px)); }
+      #stage-guide { top:51%; }
+    }
     @media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; } }
   </style>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/hands.js"></script>
-  <script defer src="./neural-v20.js?v=20.1"></script>
+  <script defer src="./neural-v20.js?v=20.2"></script>
 </head>
 <body>
   <div id="interaction-layer" aria-label="Zone de dessin avec le doigt ou la souris"></div>
   <div id="hand-cursor" hidden aria-hidden="true"></div>
-  <video class="input_video" playsinline muted aria-hidden="true"></video>
+  <div id="camera-preview" class="mirror" aria-label="Aperçu de la caméra et de la détection des mains">
+    <div class="preview-picture">
+      <video class="input_video" playsinline muted aria-hidden="true"></video>
+      <canvas id="preview-landmarks" width="320" height="240" aria-hidden="true"></canvas>
+    </div>
+    <div class="preview-caption" id="preview-caption">Caméra active</div>
+  </div>
+  <div id="touch-cursor" aria-hidden="true"></div>
   <main id="app">
     <header id="hud" aria-label="Commandes de Neural Art">
-      <div class="brand"><h1>NEURAL <span>ART</span></h1><span class="version">V20.1 / STUDIO NIKO</span></div>
+      <div class="brand"><h1>NEURAL <span>ART</span></h1><span class="version">V20.2 / STUDIO NIKO</span></div>
       <p class="subtitle">Peinture holographique 3D • gestes • tactile • voix</p>
+      <div class="mobile-actions">
+        <button class="action primary" id="camera-quick" type="button">Caméra</button>
+        <button class="action" id="tools-toggle" type="button" aria-expanded="false" aria-controls="hud-controls">Outils ▾</button>
+      </div>
       <div class="status-bar">
         <span class="stat" id="status" role="status">STATUS: LOADING</span>
         <span class="stat" id="hand-status">HANDS: OFFLINE</span>
         <span class="stat" id="stroke-count">STROKES: 0</span>
+        <span class="stat" id="mode-status">MODE: TACTILE</span>
       </div>
+      <div id="hud-controls">
       <div class="quick">
         <button class="action primary" id="camera-btn" type="button">Activer la caméra</button>
         <button class="action" id="voice-btn" type="button">Activer la voix</button>
@@ -148,7 +186,9 @@
           <button class="action danger" type="button" id="reset-key-btn">Effacer la clé</button>
         </div>
       </details>
+      </div>
     </header>
+    <div id="stage-guide" aria-live="polite"><strong>Crée ton œuvre ici</strong>Glisse ton doigt sur l'écran pour dessiner en 3D.<span class="guide-small">La caméra est facultative. Bouton « Outils » pour les pinceaux et exports.</span></div>
     <section id="ai-terminal" aria-label="Messages de l'atelier">
       <div id="chat-log" role="status" aria-live="polite">> Chargement du moteur…</div>
       <details>
