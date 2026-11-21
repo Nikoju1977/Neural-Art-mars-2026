@@ -1,4 +1,4 @@
-/* Neural Art V20.3 — Studio Niko — moteur de peinture gestuelle 3D.
+/* Neural Art V20.4 — Studio Niko — moteur de peinture gestuelle 3D.
  * Aucune cle IA necessaire pour dessiner. Three.js et MediaPipe sont charges par index.html.
  */
 (() => {
@@ -21,7 +21,7 @@
     missedFrames: 0, palmX: null, palmY: null, lastInference: 0 };
   let mirrorCamera = true, trackingSensitivity = 1, motionSmoothing = 0.53;
   let gestureRotate = false, cameraStarting = false, cameraErrors = 0;
-  let binCloud = null;
+  let binCloud = null, importedModel = null;
   let handAssetsBase = '';
   const HAND_SOURCES = [
     'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/',
@@ -283,6 +283,7 @@
   }
   function clear() {
     removeBinCloud();
+    removeImportedModel();
     endStroke();
     for (const stroke of strokes) { painting.remove(stroke.mesh); safeDispose(stroke.mesh); }
     strokes = [];
@@ -626,6 +627,83 @@
       catch (e) { ui('Commande vocale indisponible : ' + e.message); }
     });
   }
+  function removeImportedModel() {
+    if (!importedModel || !painting) return;
+    painting.remove(importedModel);
+    importedModel.traverse(node => {
+      if (node.isMesh || node.isPoints || node.isLine) safeDispose(node);
+    });
+    importedModel=null;
+  }
+  async function ensureGLTFLoader() {
+    if (typeof THREE === 'undefined') throw new Error('Three.js non chargé.');
+    if (typeof THREE.GLTFLoader === 'function') return;
+    const urls=[
+      'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js',
+      'https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js'
+    ];
+    for (const url of urls) {
+      try {
+        await new Promise((resolve,reject)=>{
+          const script=document.createElement('script');
+          let finished=false;
+          const finish=(error)=>{
+            if (finished) return;
+            finished=true;clearTimeout(timeout);
+            if (error) {script.remove();reject(error);} else resolve();
+          };
+          const timeout=setTimeout(()=>finish(new Error('Chargement trop long')),9000);
+          script.src=url;script.async=true;
+          script.onload=()=>THREE.GLTFLoader ? finish() : finish(new Error('GLTFLoader absent'));
+          script.onerror=()=>finish(new Error('Ressource inaccessible'));
+          document.head.append(script);
+        });
+        if (THREE.GLTFLoader) return;
+      }catch(e){ console.warn('Chargeur GLTF indisponible',url,e.message); }
+    }
+    throw new Error('Le module glTF est inaccessible. Vérifie la connexion puis réessaie.');
+  }
+  async function importGLTF3D(arrayBuffer,filename='modele.gltf') {
+    if (!painting || !renderer || typeof THREE === 'undefined') throw new Error('Moteur WebGL non prêt.');
+    if (!(arrayBuffer instanceof ArrayBuffer) || !arrayBuffer.byteLength) throw new Error('Fichier vide ou non lisible.');
+    if (arrayBuffer.byteLength>32*1024*1024) throw new Error('Limite : 32 Mo par modèle pour préserver la mémoire.');
+    await ensureGLTFLoader();
+    const isGLB=arrayBuffer.byteLength>=4 && new DataView(arrayBuffer).getUint32(0,true)===0x46546c67;
+    const contents=isGLB ? arrayBuffer : new TextDecoder().decode(new Uint8Array(arrayBuffer));
+    if (!isGLB) {
+      let json;
+      try{json=JSON.parse(contents);}catch(e){throw new Error('Fichier GLTF JSON invalide.');}
+      if (json.asset?.version !== '2.0') throw new Error('Ce lecteur prend en charge glTF 2.0.');
+      if ((json.buffers||[]).some(b=>b.uri && !b.uri.startsWith('data:'))||
+          (json.images||[]).some(i=>i.uri && !i.uri.startsWith('data:')))
+        throw new Error('Le GLTF référence des fichiers séparés (.bin/textures). Utilise un GLB autonome ou un GLTF avec données intégrées.');
+    }
+    const asset=await new Promise((resolve,reject)=>{
+      try { new THREE.GLTFLoader().parse(contents,'',resolve,reject); }
+      catch(e){reject(e);}
+    });
+    const group=asset && asset.scene;
+    if (!group) throw new Error('Le fichier ne contient aucune scène glTF.');
+    group.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(group);
+    if (bounds.isEmpty()) throw new Error('Le modèle ne contient pas de géométrie visible.');
+    const center=bounds.getCenter(new THREE.Vector3());
+    const extent=bounds.getSize(new THREE.Vector3());
+    const maxDim=Math.max(extent.x,extent.y,extent.z,0.0001);
+    const factor=Math.min(100000,27/maxDim);
+    // Groupe externe, sans modifier les données originales.
+    const container=new THREE.Group();
+    container.name='Import GLTF : '+filename;
+    container.add(group);
+    group.position.sub(center);
+    group.scale.setScalar(factor);
+    removeImportedModel();
+    importedModel=container;
+    painting.add(container);
+    if ($('stage-guide')) $('stage-guide').hidden=true;
+    ui('Modèle glTF importé : '+filename+'. Affiché au centre de la scène 3D.');
+    return {name:filename,dimensions:extent.toArray().map(x=>Number(x.toFixed(3))),scale:factor};
+  }
   function removeBinCloud() {
     if (binCloud && painting) {
       painting.remove(binCloud);
@@ -713,7 +791,9 @@
     exportScene:getBinScene,
     importScene:loadBinScene,
     showXYZ:showBinXYZ,
-    removeXYZ:removeBinCloud
+    removeXYZ:removeBinCloud,
+    importGLTF:importGLTF3D,
+    removeGLTF:removeImportedModel
   });
   function bindUI() {
     $('camera-btn').addEventListener('click', toggleCamera);
