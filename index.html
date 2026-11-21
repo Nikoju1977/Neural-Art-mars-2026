@@ -74,6 +74,15 @@
       #chat-log { max-height:36px; font-size:11px; }
       button.action { padding:8px 5px; font-size:11px; }
     }
+    #quick-palette { display:flex; gap:7px; flex-wrap:wrap; margin:9px 0 5px; max-width:100%; }
+    .color-chip { display:inline-flex; align-items:center; justify-content:center; padding:0; flex:0 0 auto; width:26px; height:26px; background:var(--swatch,#00f2ff); border-radius:8px; border:2px solid #ffffff25; color:#07131b; cursor:pointer; box-shadow:inset 0 0 0 1px #0003; }
+    .color-chip.active { outline:2px solid #fff; outline-offset:2px; }
+    #palette-tabs { display:flex; flex-wrap:wrap; gap:5px; margin:10px 0 7px; }
+    #palette-tabs button { border:1px solid #346575; padding:6px 9px; border-radius:7px; background:#092635; color:#a9e5ed; font-size:11px; }
+    #palette-tabs button[aria-pressed="true"] { background:#00849a; border-color:#51e4ff; color:white; }
+    #palette-swatches { display:grid; grid-template-columns:repeat(9,minmax(0,1fr)); gap:6px; padding:7px 3px 11px; }
+    #palette-swatches .color-chip { width:100%; aspect-ratio:1; height:auto; min-height:25px; }
+    .palette-caption { color:#90bdc8; font-size:11px; }
     .mobile-actions { display:none; gap:7px; margin-top:8px; }
     .mobile-actions button { flex:1; min-width:0; }
     #hud-controls { display:block; }
@@ -125,6 +134,7 @@
       <div class="mobile-actions">
         <button class="action primary" id="camera-quick" type="button">Caméra</button>
         <button class="action" id="tools-toggle" type="button" aria-expanded="false" aria-controls="hud-controls">Outils ▾</button>
+        <button class="action" id="test-quick" type="button">Test dessin</button>
       </div>
       <div class="status-bar">
         <span class="stat" id="status" role="status">STATUS: LOADING</span>
@@ -132,11 +142,13 @@
         <span class="stat" id="stroke-count">STROKES: 0</span>
         <span class="stat" id="mode-status">MODE: TACTILE</span>
       </div>
+      <div id="quick-palette" role="group" aria-label="Couleurs rapides"></div>
       <div id="hud-controls">
       <div class="quick">
         <button class="action primary" id="camera-btn" type="button">Activer la caméra</button>
         <button class="action" id="voice-btn" type="button">Activer la voix</button>
         <button class="action" id="undo-btn" type="button">Annuler</button>
+        <button class="action" id="test-btn" type="button">Dessiner un test</button>
         <button class="action" id="export-png-btn" type="button">Image PNG</button>
         <button class="action" id="export-btn" type="button">Exporter 3D</button>
         <button class="action danger" id="clear-paint-btn" type="button">Effacer</button>
@@ -151,6 +163,9 @@
           <label class="full">Épaisseur : <output id="size-value">0.7</output>
             <input id="brush-size" type="range" min="0.1" max="2.5" step="0.1" value="0.7"></label>
         </div>
+        <p class="palette-caption">Grand nuancier : plus de 150 couleurs, classées par famille. Choisis une couleur ou utilise le sélecteur pour créer n'importe quelle nuance.</p>
+        <div id="palette-tabs" role="group" aria-label="Familles de couleurs"></div>
+        <div id="palette-swatches" role="group" aria-label="Grand nuancier"></div>
         <div class="hint">Couleur active : <span id="brush-color-text">#00f2ff</span> <span id="brush-color-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#00f2ff"></span></div>
       </details>
       <details class="settings">
@@ -164,6 +179,7 @@
             <input type="range" id="motion-smoothing" min="0.25" max="1" step="0.05" value="0.53"></label>
         </div>
         <button class="action" type="button" id="reset-view">Réinitialiser la vue 3D</button>
+        <p id="gesture-indicator" class="hint" role="status">Gestes : caméra inactive · dessin tactile disponible.</p>
         <p class="hint">Pince pouce-index pour dessiner. Écarte les doigts pour déplacer la main sans peindre. Le cercle cyan indique la main suivie, le rose indique le dessin.</p>
       </details>
       <details class="settings" id="studio-help">
