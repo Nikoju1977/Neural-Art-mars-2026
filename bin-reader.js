@@ -6,6 +6,7 @@
   const MAX_NATIVE_JSON = 8 * 1024 * 1024;
   const PREVIEW_BYTES = 512;
   const MAX_POINTS = 15000;
+  let binDownloadURL=null;
   let activeBuffer = null, activeName = '', activeNative = null, activeGLTF = false,
     selectionSequence = 0, activeResources = {};
   const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||
@@ -171,10 +172,19 @@
   }
   function saveBuffer(bytes,name) {
     const blob=new Blob([bytes],{type:'application/octet-stream'});
-    const url=URL.createObjectURL(blob);
+    if (binDownloadURL) URL.revokeObjectURL(binDownloadURL);
+    binDownloadURL=URL.createObjectURL(blob);
+    const link=$('bin-download-link');
+    if (link) {
+      link.href=binDownloadURL;link.download=name;
+      link.textContent='Enregistrer '+name;
+      link.style.display='block';
+    }
     const a=document.createElement('a');
-    a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),15000);
+    a.href=binDownloadURL;a.download=name;
+    document.body.appendChild(a);a.click();a.remove();
+    if (isIOS) message('BIN prêt : touche le bouton « Enregistrer » ci-dessus pour utiliser les téléchargements Safari.');
+    else message('Fichier BIN prêt. Si nécessaire, utilise « Enregistrer ».');
   }
   function exportNative() {
     try {
