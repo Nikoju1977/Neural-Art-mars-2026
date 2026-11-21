@@ -319,11 +319,30 @@
       }, 'image/png');
     } catch (e) { ui('Erreur PNG : ' + e.message); }
   }
-  function exportGLTF() {
+  async function ensureGLTFExporter() {
+    if (typeof THREE !== 'undefined' && THREE.GLTFExporter) return;
+    for(const url of [
+      'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js',
+      'https://unpkg.com/three@0.128.0/examples/js/exporters/GLTFExporter.js'
+    ]) {
+      try {
+        await new Promise((resolve,reject)=>{
+          const script=document.createElement('script');
+          const timer=setTimeout(()=>reject(new Error('délai dépassé')),8500);
+          script.onload=()=>{clearTimeout(timer);THREE.GLTFExporter?resolve():reject(new Error('module absent'));};
+          script.onerror=()=>{clearTimeout(timer);reject(new Error('réseau inaccessible'));};
+          script.src=url;script.async=true;document.head.append(script);
+        });
+        if(THREE.GLTFExporter) return;
+      }catch(e){console.warn('Export GLTF : module indisponible',url,e.message);}
+    }
+    throw new Error('Chargeur d’export 3D inaccessible. Connecte-toi à Internet et réessaie.');
+  }
+  async function exportGLTF() {
     endStroke();
     if (!strokes.length) { ui('Dessine avant de lancer un export 3D.'); return; }
-    if (!THREE.GLTFExporter) { ui('Module GLTF non chargé : connexion requise.'); return; }
     try {
+      await ensureGLTFExporter();
       const exporter = new THREE.GLTFExporter();
       exporter.parse(painting, (output) => {
         const json = JSON.stringify(output);
@@ -898,6 +917,7 @@
       $('smoothing-value').textContent = motionSmoothing.toFixed(2);
     });
     $('reset-view').addEventListener('click', () => {
+      if (!painting) { ui('Moteur 3D indisponible.'); return; }
       painting.rotation.set(0, 0, 0); ui('Rotation 3D réinitialisée.');
     });
     $('clear-paint-btn').addEventListener('click', clear);
@@ -978,13 +998,12 @@
   }
   function init() {
     const engineReady=setupThree();
-    if (!engineReady) {
-      ui('Le moteur 3D est indisponible. Les outils et l’inspection de fichiers restent accessibles.');
-      return;
-    }
     bindUI();
+    if (!engineReady)
+      ui('Moteur 3D indisponible. Lance « Diagnostic iPhone / Android » pour voir les fonctions disponibles.');
+    else
+      ui('Atelier prêt : dessin tactile, import 3D et camera disponibles selon autorisations.');
     try { localStorage.removeItem('niko_mistral_key'); } catch (_) { /* pas de stockage */ }
-    ui('Atelier prêt. La zone centrale accepte le doigt ou la souris. Utilise « Test dessin » pour vérifier le rendu.');
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js')
       .catch((e) => console.warn('Service worker indisponible', e));
   }
