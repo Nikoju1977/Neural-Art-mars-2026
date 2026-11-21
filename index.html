@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#041017">
-  <meta name="description" content="Neural Art V20.3 Studio Niko : peinture gestuelle et tactile 3D gratuite, tracés fluides, export PNG et GLTF, caméra MediaPipe et voix optionnelles.">
-  <meta property="og:title" content="Neural Art V20.3 | Studio Niko">
+  <meta name="description" content="Neural Art V20.4 Studio Niko : peinture gestuelle et tactile 3D gratuite, tracés fluides, export PNG et GLTF, caméra MediaPipe et voix optionnelles.">
+  <meta property="og:title" content="Neural Art V20.4 | Studio Niko">
   <meta property="og:description" content="Atelier de peinture holographique gestuelle en 3D — gratuit sans clé IA.">
   <meta property="og:type" content="website">
-  <title>NEURAL ART V20.3 — STUDIO NIKO</title>
+  <title>NEURAL ART V20.4 — STUDIO NIKO</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <style>
@@ -129,13 +129,18 @@
       #hud:has(#tools-open:checked) #tools-toggle { border-color:#21e5f3; background:#075f70; }
       #ai-terminal { z-index:1; }
     }
+    #stage-guide[hidden] {display:none!important;}
+    body:has(#tools-open:checked) #camera-preview {display:none!important;}
+    #bin-load-gltf {grid-column:1/-1; background:#006f82; border-color:#28d9ed;}
+    #bin-reader .hint strong {color:#c8f5ff;}
+    #bin-status {font-size:11px;color:#91f0c3;padding:3px 0;}
     @media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; } }
   </style>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
-  <script defer src="./neural-v20.js?v=20.3"></script>
-  <script defer src="./bin-reader.js?v=20.3"></script>
+  <script defer src="./neural-v20.js?v=20.4"></script>
+
 </head>
 <body>
   <div id="interaction-layer" aria-label="Zone de dessin avec le doigt ou la souris"></div>
@@ -150,14 +155,14 @@
   <div id="touch-cursor" aria-hidden="true"></div>
   <main id="app">
     <header id="hud" aria-label="Commandes de Neural Art">
-      <div class="brand"><h1>NEURAL <span>ART</span></h1><span class="version">V20.3 / STUDIO NIKO</span></div>
+      <div class="brand"><h1>NEURAL <span>ART</span></h1><span class="version">V20.4 / STUDIO NIKO</span></div>
       <p class="subtitle">Peinture holographique 3D • gestes • tactile • voix</p>
       <input type="checkbox" id="tools-open" aria-label="Afficher ou masquer tous les outils et pinceaux">
       <div class="mobile-actions">
         <button class="action primary" id="camera-quick" type="button">Caméra</button>
         <label class="action" id="tools-toggle" for="tools-open">Outils / Pinceaux ▾</label>
         <button class="action" id="test-quick" type="button">Test dessin</button>
-        <button class="action" id="bin-open-mobile" type="button">BIN</button>
+        <button class="action" id="bin-open-mobile" type="button">Import 3D</button>
       </div>
       <div class="status-bar">
         <span class="stat" id="status" role="status">STATUS: LOADING</span>
@@ -183,7 +188,7 @@
         <div class="hint">Couleur active : <span id="brush-color-text">#00f2ff</span> <span id="brush-color-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#00f2ff"></span></div>
       </details>
       <div class="quick">
-        <button class="action" style="grid-column:1/-1" type="button" id="bin-open-quick">Ouvrir un fichier BIN</button>
+        <button class="action" style="grid-column:1/-1" type="button" id="bin-open-quick">Importer un fichier 3D (GLTF / GLB / BIN)</button>
         <button class="action primary" id="camera-btn" type="button">Activer la caméra</button>
         <button class="action" id="voice-btn" type="button">Activer la voix</button>
         <button class="action" id="undo-btn" type="button">Annuler</button>
@@ -207,16 +212,18 @@
         <p class="hint">Pince pouce-index pour dessiner. Écarte les doigts pour déplacer la main sans peindre. Le cercle cyan indique la main suivie, le rose indique le dessin.</p>
       </details>
       <details class="settings" id="bin-reader">
-        <summary>Lecteur BIN • inspection et 3D</summary>
+        <summary>Importateur 3D • GLTF, GLB et BIN</summary>
         <div class="bin-control">
-          <label>Fichier local (.bin, .raw, .dat, .glb)
-            <input id="bin-file" type="file" accept=".bin,.raw,.dat,.glb,application/octet-stream,model/gltf-binary">
+          <label>Fichier local (.gltf, .glb, .bin, .raw, .dat)
+            <input id="bin-file" type="file" accept=".gltf,.glb,.bin,.raw,.dat,model/gltf+json,model/gltf-binary,application/octet-stream">
           </label>
-          <div id="bin-message" role="status" aria-live="polite">Choisis un fichier : lecture locale, sans transfert vers un serveur.</div>
+          <div id="bin-message" role="status" aria-live="polite">Initialisation du lecteur GLTF / GLB / BIN…</div>
+          <p class="hint"><strong>Pour revoir tes créations :</strong> choisis un fichier Neural-Art-*.gltf. Il doit s’afficher automatiquement dans l’espace 3D.</p>
           <pre id="bin-report">Aucun fichier sélectionné.</pre>
-          <p class="hint">Aperçu des 512 premiers octets, en hexadécimal et en ASCII. Une extension .bin ne suffit pas à identifier le format.</p>
+          <p class="hint">Aperçu des 512 premiers octets. Les fichiers GLTF 2.0 autonomes sont chargés en 3D ; les BIN génériques restent inspectables.</p>
           <pre id="bin-hex" aria-label="Contenu hexadécimal du fichier">—</pre>
           <div class="bin-actions">
+            <button class="action primary" id="bin-load-gltf" type="button" disabled>Afficher le modèle GLTF / GLB</button>
             <button class="action" id="bin-export" type="button">Exporter œuvre BIN</button>
             <button class="action" id="bin-load-scene" type="button" disabled>Restaurer œuvre BIN</button>
           </div>
@@ -237,6 +244,7 @@
           </div>
           <button class="action primary" id="bin-points" type="button" disabled>Afficher les points XYZ en 3D</button>
           <button class="action" id="bin-remove" type="button">Retirer le nuage de points</button>
+          <button class="action" id="bin-remove-gltf" type="button">Retirer le modèle GLTF / GLB</button>
           <p class="hint">Les fichiers BIN inconnus peuvent être inspectés, mais leur contenu ne peut pas être reconstruit automatiquement sans connaître leur spécification.</p>
         </div>
       </details>
@@ -274,5 +282,263 @@
       </details>
     </section>
   </main>
+  <!-- Lecteur autonome embarqué : ne dépend pas du chargement d'un second fichier JS externe -->
+  <script>
+/* Neural Art Multi-format Reader v20.4 — traitement local, sans upload */
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const LIMIT = 32 * 1024 * 1024;       // avoid mobile memory pressure
+  const MAX_NATIVE_JSON = 8 * 1024 * 1024;
+  const PREVIEW_BYTES = 512;
+  const MAX_POINTS = 15000;
+  let activeBuffer = null, activeName = '', activeNative = null, activeGLTF = false, selectionSequence = 0;
+  const enc = new TextEncoder(), dec = new TextDecoder('utf-8',{fatal:false});
+  const formats = {
+    f32le:{bytes:4,read:(v,p)=>v.getFloat32(p,true)},
+    f32be:{bytes:4,read:(v,p)=>v.getFloat32(p,false)},
+    f64le:{bytes:8,read:(v,p)=>v.getFloat64(p,true)},
+    i16le:{bytes:2,read:(v,p)=>v.getInt16(p,true)},
+    u16le:{bytes:2,read:(v,p)=>v.getUint16(p,true)},
+    u8:{bytes:1,read:(v,p)=>v.getUint8(p)}
+  };
+  function message(text,isError=false) {
+    const el=$('bin-message');
+    if (el) { el.textContent=text; el.style.color=isError?'#ff9ca9':'#86f6c3'; }
+  }
+  function humanBytes(n) {
+    return n < 1024 ? n+' octets' : n < 1048576 ? (n/1024).toFixed(1)+' Ko' : (n/1048576).toFixed(2)+' Mo';
+  }
+  function magic(bytes) {
+    const ascii = Array.from(bytes.subarray(0,Math.min(bytes.length,12)),v => v>=32&&v<127?String.fromCharCode(v):'.').join('');
+    const head = dec.decode(bytes.subarray(0,Math.min(bytes.length,8)));
+    if (head === 'NARTBIN1') return 'Neural Art BIN v1 (œuvre 3D réimportable)';
+    if (ascii.startsWith('glTF')) return 'GLB : scène 3D glTF binaire';
+    if (bytes.length>24 && bytes[0]===123) {
+      try {
+        const lead=dec.decode(bytes.subarray(0,Math.min(bytes.length,4096)));
+        if (/["']?asset["']?\s*:\s*\{/.test(lead) && /"version"\s*:\s*"2\.0"/.test(lead))
+          return 'GLTF 2.0 : scène 3D JSON';
+      } catch(_) { /* données non textuelles */ }
+    }
+    if (ascii.startsWith('PK')) return 'ZIP ou archive compatible ZIP';
+    if (ascii.startsWith('RIFF')) return 'Conteneur RIFF (ex. WAV ou AVI)';
+    if (ascii.startsWith('%PDF')) return 'Document PDF';
+    if (bytes.length>=8 && [137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v)) return 'Image PNG';
+    if (bytes.length>=3 && bytes[0]===255&&bytes[1]===216&&bytes[2]===255) return 'Image JPEG';
+    if (bytes.length>=4 && bytes[0]===0&&bytes[1]===0&&bytes[2]===0&&bytes[3]===0) return 'Données binaires non identifiées (en-tête nul)';
+    return 'Binaire générique : structure inconnue';
+  }
+  function hexDump(bytes) {
+    const lines=[];
+    for(let pos=0;pos<bytes.length;pos+=16) {
+      const segment=bytes.subarray(pos,pos+16);
+      const hex=Array.from(segment,b=>b.toString(16).padStart(2,'0')).join(' ');
+      const chars=Array.from(segment,b=>(b>=32&&b<=126)?String.fromCharCode(b):'.').join('');
+      lines.push(pos.toString(16).padStart(8,'0')+'  '+hex.padEnd(47,' ')+'  |'+chars+'|');
+    }
+    return lines.join('\n') || '(fichier vide)';
+  }
+  function parseNative(buffer) {
+    if (buffer.byteLength < 12) throw new Error('En-tête BIN Neural Art tronqué.');
+    const view=new DataView(buffer);
+    const len=view.getUint32(8,true);
+    if (len===0 || len>MAX_NATIVE_JSON || len !== buffer.byteLength-12)
+      throw new Error('Taille de l’œuvre incorrecte : fichier corrompu ou incompatible.');
+    const payload=JSON.parse(dec.decode(new Uint8Array(buffer,12,len)));
+    if (!payload || payload.format!=='neural-art-binary' || payload.version!==1 || !Array.isArray(payload.strokes))
+      throw new Error('Structure BIN Neural Art invalide.');
+    return payload;
+  }
+  async function loadFile(file) {
+    const seq=++selectionSequence;
+    activeBuffer=null;activeNative=null;activeGLTF=false;activeName='';
+    $('bin-load-scene').disabled=true;
+    $('bin-points').disabled=true;
+    if ($('bin-load-gltf')) $('bin-load-gltf').disabled=true;
+    $('bin-report').textContent='Lecture du fichier…';
+    $('bin-hex').textContent='…';
+    if (!file) { $('bin-report').textContent='Aucun fichier sélectionné.'; return; }
+    if (file.size > LIMIT) {
+      $('bin-report').textContent='Taille : '+humanBytes(file.size);
+      message('Fichier trop volumineux : limite de 32 Mo pour protéger la mémoire du téléphone.',true);
+      return;
+    }
+    if (file.size===0) {
+      $('bin-report').textContent='Fichier vide.';
+      message('Fichier vide.',true);
+      return;
+    }
+    try {
+      const buffer=await file.arrayBuffer();
+      if (seq!==selectionSequence) return;
+      activeBuffer=buffer;activeName=file.name;
+      const bytes=new Uint8Array(buffer);
+      let kind=magic(bytes);
+      if (/\.gltf$/i.test(file.name) && kind.startsWith('Binaire générique')) {
+        try {
+          const data=JSON.parse(dec.decode(bytes));
+          if (data?.asset?.version==='2.0') kind='GLTF 2.0 : scène 3D JSON';
+        } catch(e) { /* fichier invalide identifié dans l'import */ }
+      }
+      const preview=bytes.subarray(0,PREVIEW_BYTES);
+      $('bin-hex').textContent=hexDump(preview);
+      const printable=bytes.subarray(0,Math.min(bytes.length,4096)).filter(b=>b>=32&&b<=126).length;
+      const ratio=Math.round(printable/Math.min(bytes.length,4096)*100);
+      const lines=[
+        'Fichier : '+file.name,
+        'Taille : '+humanBytes(file.size)+' ('+file.size+' octets)',
+        'Format détecté : '+kind,
+        'Octets texte ASCII imprimables : '+ratio+' % (échantillon)',
+        'Aperçu : '+Math.min(file.size,PREVIEW_BYTES)+' octets / '+file.size
+      ];
+      if (kind.startsWith('GLTF') || kind.startsWith('GLB')) {
+        activeGLTF=true;
+        if ($('bin-load-gltf')) $('bin-load-gltf').disabled=false;
+        message('Fichier 3D reconnu. Chargement du modèle dans la scène…');
+      } else if (kind.startsWith('Neural Art')) {
+        try {
+          activeNative=parseNative(buffer);
+          $('bin-load-scene').disabled=false;
+          lines.push('Œuvre : '+activeNative.strokes.length+' tracés enregistrés');
+          message('Œuvre Neural Art reconnue : utilise « Restaurer œuvre BIN ».');
+        } catch(e) {
+          message('Œuvre BIN endommagée : '+e.message,true);
+          lines.push('Erreur : '+e.message);
+        }
+      } else {
+        if (file.size >= 3 && !/\.(gltf|glb)$/i.test(file.name)) $('bin-points').disabled=false;
+        message('Fichier lu. Aperçu hexadécimal prêt. Pour les données XYZ, choisis le type, l’offset et le stride.');
+      }
+      $('bin-report').textContent=lines.join('\n');
+      if (activeGLTF && seq===selectionSequence) await importGLTF(seq,true);
+    } catch(e) {
+      activeBuffer=null;
+      $('bin-report').textContent='Échec de lecture.';
+      message('Impossible de lire le fichier : '+e.message,true);
+    }
+  }
+  async function importGLTF(seq=selectionSequence, auto=false) {
+    try {
+      if (!activeGLTF || !activeBuffer) throw new Error('Choisis un fichier .gltf ou .glb valide.');
+      if (!window.NeuralArtBIN || !window.NeuralArtBIN.importGLTF)
+        throw new Error('Moteur 3D indisponible. Actualise la page.');
+      message('Import du modèle 3D en cours…');
+      const info=await window.NeuralArtBIN.importGLTF(activeBuffer,activeName);
+      if (seq!==selectionSequence) return;
+      message('Modèle 3D affiché : '+info.name+' · dimensions '+info.dimensions.join(' × ')+'.');
+      if ($('mode-status')) $('mode-status').textContent='MODE: MODELE 3D';
+      // Fermer uniquement le panneau et laisser l’artiste voir l’œuvre importée.
+      if (auto && $('tools-open')) $('tools-open').checked=false;
+      const binPanel=$('bin-reader'); if (auto && binPanel) binPanel.open=false;
+    } catch(e) {
+      if (seq===selectionSequence) message('Import 3D impossible : '+e.message,true);
+    }
+  }
+  function saveBuffer(bytes,name) {
+    const blob=new Blob([bytes],{type:'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),15000);
+  }
+  function exportNative() {
+    try {
+      if (!window.NeuralArtBIN) throw new Error('Moteur Neural Art absent.');
+      const payload=window.NeuralArtBIN.exportScene();
+      const bytes=enc.encode(JSON.stringify(payload));
+      if (bytes.byteLength>MAX_NATIVE_JSON) throw new Error('Œuvre trop grande pour le format BIN.');
+      const out=new Uint8Array(12+bytes.byteLength);
+      out.set(enc.encode('NARTBIN1'),0);
+      new DataView(out.buffer).setUint32(8,bytes.byteLength,true);
+      out.set(bytes,12);
+      saveBuffer(out,'Neural-Art-'+Date.now()+'.bin');
+      message('Œuvre exportée au format BIN Neural Art ('+humanBytes(out.byteLength)+').');
+    } catch(e) { message('Export impossible : '+e.message,true); }
+  }
+  function importNative() {
+    try {
+      if (!activeNative) throw new Error('Ouvre d’abord un fichier BIN Neural Art valide.');
+      if (!window.NeuralArtBIN) throw new Error('Moteur Neural Art absent.');
+      const count=window.NeuralArtBIN.importScene(activeNative);
+      message('Œuvre restaurée : '+count+' tracés 3D.');
+      const checkbox=$('tools-open'); if (checkbox) checkbox.checked=false;
+    } catch(e) { message('Import impossible : '+e.message,true); }
+  }
+  function readXYZ() {
+    if (!activeBuffer) throw new Error('Ouvre d’abord un fichier binaire.');
+    const config=formats[$('bin-format').value];
+    if (!config) throw new Error('Type numérique non reconnu.');
+    const offset=Number($('bin-offset').value);
+    const stride=Number($('bin-stride').value);
+    const triplet=3*config.bytes;
+    if (!Number.isSafeInteger(offset)||offset<0||offset>activeBuffer.byteLength-triplet)
+      throw new Error('Offset hors fichier pour un triplet XYZ.');
+    if (!Number.isSafeInteger(stride)||stride<triplet||stride>65536)
+      throw new Error('Stride invalide : minimum '+triplet+' octets, maximum 65536.');
+    const available=1+Math.floor((activeBuffer.byteLength-triplet-offset)/stride);
+    const count=Math.min(MAX_POINTS,available);
+    if (!count) throw new Error('Pas assez de données pour des coordonnées XYZ.');
+    const view=new DataView(activeBuffer),coords=[];
+    let invalid=0;
+    for (let i=0;i<count;i++) {
+      const p=offset+i*stride;
+      const v=[0,1,2].map(k=>config.read(view,p+k*config.bytes));
+      if (v.every(n=>Number.isFinite(n) && Math.abs(n)<=1e12)) coords.push(v);
+      else invalid++;
+    }
+    if (!coords.length) throw new Error('Aucune coordonnée XYZ numérique valide trouvée.');
+    return {coords,available,invalid};
+  }
+  function showPoints() {
+    try {
+      if (!window.NeuralArtBIN) throw new Error('Moteur 3D absent.');
+      const out=readXYZ();
+      const count=window.NeuralArtBIN.showXYZ(out.coords);
+      message(count+' points visibles en 3D. '+(out.available>MAX_POINTS?'Aperçu limité aux 15 000 premiers triplets. ':'')+(out.invalid?'Triplets invalides ignorés : '+out.invalid+'.':''));
+      const checkbox=$('tools-open'); if (checkbox) checkbox.checked=false;
+    } catch(e) { message('Nuage 3D impossible : '+e.message,true); }
+  }
+  function initialize() {
+    const file=$('bin-file');
+    if (!file) return;
+    window.NeuralArtReaderReady=true;
+    message('Lecteur prêt : ouvre un GLTF, GLB ou BIN. Les modèles GLTF compatibles s’affichent automatiquement.');
+    file.addEventListener('click',()=>{file.value='';});
+    file.addEventListener('change',()=>{const details=$('bin-reader'); if(details) details.open=true;loadFile(file.files&&file.files[0]);});
+    $('bin-format').addEventListener('change',()=>{
+      $('bin-stride').value=3*formats[$('bin-format').value].bytes;
+    });
+    const openPicker=()=>{
+      const checkbox=$('tools-open'); if (checkbox) checkbox.checked=true;
+      const details=$('bin-reader'); if(details) details.open=true;
+      file.click();
+    };
+    for (const id of ['bin-open-quick','bin-open-mobile']) {
+      const button=$(id);
+      if(button) button.addEventListener('click',openPicker);
+    }
+    if ($('bin-load-gltf')) $('bin-load-gltf').addEventListener('click',()=>importGLTF());
+    if ($('bin-remove-gltf')) $('bin-remove-gltf').addEventListener('click',()=>{
+      if (window.NeuralArtBIN?.removeGLTF) {
+        window.NeuralArtBIN.removeGLTF();
+        message('Modèle GLTF retiré de la scène.');
+      } else message('Moteur 3D indisponible.',true);
+    });
+    $('bin-export').addEventListener('click',exportNative);
+    $('bin-load-scene').addEventListener('click',importNative);
+    $('bin-points').addEventListener('click',showPoints);
+    $('bin-remove').addEventListener('click',()=>{
+      try {
+        if (!window.NeuralArtBIN) throw new Error('Moteur 3D absent.');
+        window.NeuralArtBIN.removeXYZ();
+        message('Nuage XYZ retiré.');
+      } catch(e) { message('Impossible de retirer le nuage : '+e.message,true); }
+    });
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',initialize,{once:true});
+  else initialize();
+})();
+  </script>
 </body>
 </html>
