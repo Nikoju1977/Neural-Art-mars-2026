@@ -1,4 +1,4 @@
-/* Neural Art V20 — Studio Niko — moteur de peinture gestuelle 3D.
+/* Neural Art V20.2 — Studio Niko — moteur de peinture gestuelle 3D.
  * Aucune cle IA necessaire pour dessiner. Three.js et MediaPipe sont charges par index.html.
  */
 (() => {
@@ -20,7 +20,158 @@
     initialized: false, pinched: false, pinchFrames: 0, releaseFrames: 0,
     missedFrames: 0, palmX: null, palmY: null, lastInference: 0 };
   let mirrorCamera = true, trackingSensitivity = 1, motionSmoothing = 0.53;
-  let gestureRotate = false, cameraStarting = false;
+  let gestureRotate = false, cameraStarting = false, cameraErrors = 0;
+  let handAssetsBase = '';
+  const HAND_SOURCES = [
+    'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/',
+    'https://unpkg.com/@mediapipe/hands@0.4.1675469240/'
+  ];
+  async function ensureHandsLibrary() {
+    if (typeof Hands === 'function' && handAssetsBase) return true;
+    for (const base of HAND_SOURCES) {
+      try {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          let done = false;
+          const complete = (err) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            if (err) { script.remove(); reject(err); }
+            else resolve();
+          };
+          const timer = setTimeout(() => complete(new Error('chargement trop long')), 10000);
+          script.async = true;
+          script.src = base + 'hands.js';
+          script.onload = () => typeof Hands === 'function'
+            ? complete() : complete(new Error('moteur MediaPipe absent'));
+          script.onerror = () => complete(new Error('CDN inaccessible'));
+          document.head.appendChild(script);
+        });
+        handAssetsBase = base;
+        return true;
+      } catch (e) { console.warn('MediaPipe indisponible :', base, e.message); }
+    }
+    return false;
+  }
+  function drawPreviewLandmarks(points) {
+    const canvas = $('preview-landmarks');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    if (!points) return;
+    const chains = [[0,1,2,3,4],[0,5,6,7,8],[5,9,10,11,12],
+      [9,13,14,15,16],[13,17,18,19,20],[0,17]];
+    ctx.strokeStyle = '#00efff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (const chain of chains) {
+      ctx.beginPath();
+      chain.forEach((index,i) => {
+        const point = points[index]; if (!point) return;
+        if (i === 0) ctx.moveTo(point.x*w, point.y*h);
+        else ctx.lineTo(point.x*w, point.y*h);
+      });
+      ctx.stroke();
+    }
+    for (let i=0; i<points.length; i++) {
+      const p = points[i];
+      ctx.beginPath(); ctx.arc(p.x*w, p.y*h, (i===4 || i===8) ? 6 : 3.2, 0, Math.PI*2);
+      ctx.fillStyle = i===4 || i===8 ? '#ff4ccf' : '#f7ffff'; ctx.fill();
+    }
+  }
+  function describeGesture(message) {
+    const el = $('gesture-indicator');
+    if (el && el.textContent !== message) el.textContent = message;
+    const caption = $('preview-caption');
+    if (caption && caption.textContent !== message) caption.textContent = message;
+  }
+  function hslToHex(h,s,l) {
+    const f = (n) => {
+      const k = (n + h/30) % 12;
+      const a = s * Math.min(l, 1-l);
+      return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,'0');
+    };
+    return '#' + f(0) + f(8) + f(4);
+  }
+  const groups = [
+    { name:'Néon', colors:Array.from({length:48}, (_,i) => hslToHex((i%24)*15, 1, i<24 ? .55 : .68)) },
+    { name:'Spectre', colors:Array.from({length:72}, (_,i) => hslToHex((i%24)*15, .92, [.38,.54,.70][Math.floor(i/24)])) },
+    { name:'Pastel', colors:Array.from({length:48}, (_,i) => hslToHex((i%24)*15, .68, i<24 ? .78 : .88)) },
+    { name:'Nature', colors:Array.from({length:48}, (_,i) => hslToHex((i%24)*15, i<24 ? .42 : .62, i<24 ? .34 : .56)) },
+    { name:'Métal', colors:['#fff4ba','#ffe27a','#ffca3a','#c99b39','#8c691f','#f9f1dd',
+      '#dedfe4','#babfc9','#818b99','#606874','#f7c9a1','#e6a574',
+      '#c57b49','#854d32','#b97b71','#8b5558','#d5dbe1','#a1b4ba',
+      '#779eae','#526776','#b8a6d4','#86749c','#cfddbb','#91a978'] },
+    { name:'Gris', colors:Array.from({length:24}, (_,i) => {
+      const v=Math.round(i*255/23).toString(16).padStart(2,'0');return '#'+v+v+v;
+    }) },
+    { name:'Peau', colors:['#fff2e3','#fbe2c7','#f9d4ae','#efd1b8','#eac5a5','#dcb08a',
+      '#c69a75','#bb8865','#a97550','#956946','#875638','#6e4329','#55331f',
+      '#472713','#d7a18c','#c68c77','#b16e55','#91523e','#774633','#583222'] }
+  ];
+  function createColorChip(color, label) {
+    const chip = document.createElement('button');
+    chip.type = 'button'; chip.className = 'color-chip';
+    chip.style.setProperty('--swatch', color);
+    chip.dataset.color = color.toLowerCase();
+    chip.title = label + ' : ' + color.toUpperCase();
+    chip.setAttribute('aria-label', chip.title);
+    chip.addEventListener('click', () => updateColor(color));
+    return chip;
+  }
+  function renderColorGroup(group) {
+    const parent=$('palette-swatches'), tabs=$('palette-tabs');
+    if (!parent || !tabs) return;
+    parent.replaceChildren();
+    group.colors.forEach((color,i) => parent.append(createColorChip(color, group.name + ' ' + (i+1))));
+    for (const b of tabs.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.group === group.name));
+    syncColorChips();
+  }
+  function syncColorChips() {
+    for (const chip of document.querySelectorAll('.color-chip')) {
+      chip.classList.toggle('active', chip.dataset.color === brushColor.toLowerCase());
+    }
+  }
+  function setupPalette() {
+    const tabs=$('palette-tabs'), quick=$('quick-palette');
+    if (!tabs || !quick) return;
+    for (const group of groups) {
+      const button=document.createElement('button');
+      button.type='button'; button.textContent=group.name; button.dataset.group=group.name;
+      button.setAttribute('aria-pressed','false');
+      button.addEventListener('click', () => renderColorGroup(group));
+      tabs.append(button);
+    }
+    const quickColors = ['#00f2ff','#ff3ad8','#ff0000','#ff9b43','#ffe066',
+      '#56ff68','#ffffff','#0f56ff','#a86bff','#ffbdde','#8f643d','#141414'];
+    quickColors.forEach((color,i)=>quick.append(createColorChip(color,'Rapide '+(i+1))));
+    renderColorGroup(groups[0]);
+  }
+  function drawDemo() {
+    if (!painting) { ui('Le moteur 3D est indisponible.'); return; }
+    endStroke();
+    const previous=brushColor, previousMode=brushMode, previousSize=brushSize;
+    brushMode='neon';brushSize=.8;
+    updateColor('#00f2ff');
+    const N=122;
+    for (let i=0;i<N;i++) {
+      const t=i/(N-1), a=t*Math.PI*5.5, radius=.04+t*.23;
+      const x=.5+Math.cos(a)*radius, y=.51+Math.sin(a)*radius*.77;
+      if (i===0) startStroke(x,y); else moveStroke(x,y);
+    }
+    endStroke();
+    updateColor('#ff3ad8');
+    for (let i=0;i<=75;i++) {
+      const t=i/75*Math.PI*2;
+      const r=(i%2===0 ? .11 : .105);
+      const x=.5+Math.cos(t)*r, y=.51+Math.sin(t)*r;
+      if (i===0) startStroke(x,y); else moveStroke(x,y);
+    }
+    endStroke();
+    brushMode=previousMode;brushSize=previousSize;updateColor(previous);
+    ui('Test réussi : formes 3D créées. Déplace ton doigt sur la zone libre pour dessiner.');
+  }
   function resetMotion() {
     motion.initialized = false; motion.pinched = false;
     motion.pinchFrames = 0; motion.releaseFrames = 0;
@@ -39,12 +190,16 @@
   }
 
   function setStatusHands(text) { if ($('hand-status')) $('hand-status').textContent = 'HANDS: ' + text; }
-  function updateCount() { if ($('stroke-count')) $('stroke-count').textContent = 'STROKES: ' + strokes.length; }
+  function updateCount() {
+    if ($('stroke-count')) $('stroke-count').textContent = 'STROKES: ' + strokes.length;
+    document.body.classList.toggle('has-art', strokes.length > 0);
+  }
   function updateColor(color) {
     brushColor = color;
     if ($('brush-color-text')) { $('brush-color-text').textContent = color.toUpperCase(); $('brush-color-text').style.color = color; }
     if ($('brush-color-dot')) { $('brush-color-dot').style.backgroundColor = color; $('brush-color-dot').style.color = color; }
     if ($('brush-color')) $('brush-color').value = color;
+    syncColorChips();
   }
   function safeDispose(mesh) {
     if (mesh.geometry) mesh.geometry.dispose();
@@ -233,6 +388,7 @@
   // Adaptive hysteresis + speed-dependent temporal smoothing. Distance relative
   // to palm width avoids a fixed pixel threshold across near/far hands.
   function onHandResults(result) {
+    drawPreviewLandmarks(result.multiHandLandmarks && result.multiHandLandmarks[0]);
     if (!cameraEnabled || renderer.xr.isPresenting || pointerDown) {
       resetMotion(); return;
     }
@@ -241,6 +397,8 @@
       motion.missedFrames += 1;
       if (motion.missedFrames >= 3) {
         endStroke(); resetMotion(); setStatusHands('SEARCHING');
+        if ($('mode-status')) $('mode-status').textContent='MODE: MAIN NON DETECTEE';
+        describeGesture('Montre ta main à la caméra');
       }
       return;
     }
@@ -279,6 +437,8 @@
       motion.palmX = null; motion.palmY = null;
       moveStroke(motion.x, motion.y);
       setStatusHands('DRAWING');
+      if ($('mode-status')) $('mode-status').textContent='MODE: PINCEMENT';
+      describeGesture('Pincement détecté · DESSIN');
     } else {
       endStroke();
       // Optional navigation: moving the open hand orbits the 3D sculpture.
@@ -294,6 +454,8 @@
         motion.palmX = px; motion.palmY = py;
       }
       setStatusHands(gestureRotate ? 'ROTATE / READY' : 'TRACKING');
+      if ($('mode-status')) $('mode-status').textContent=gestureRotate ? 'MODE: ROTATION 3D' : 'MODE: MAIN SUIVIE';
+      describeGesture(gestureRotate ? 'Main ouverte · rotation 3D' : 'Main suivie · pince pour dessiner');
     }
   }
   async function trackCamera() {
@@ -309,7 +471,15 @@
     motion.lastInference = now;
     processing = true;
     try { await hands.send({ image: video }); }
-    catch (e) { console.warn('MediaPipe error', e); setStatusHands('ERROR'); }
+    catch (e) {
+      console.warn('MediaPipe error', e);
+      cameraErrors += 1;
+      setStatusHands('ERROR');
+      if (cameraErrors>=3) {
+        stopCamera();
+        ui('Erreur pendant le suivi des mains. Recharge la page, vérifie ta connexion puis réessaie.');
+      }
+    }
     finally {
       processing = false;
       if (cameraEnabled) rafCamera = requestAnimationFrame(trackCamera);
@@ -323,23 +493,35 @@
     if (video) { video.pause(); video.srcObject = null; }
     endStroke(); tracking = false; resetMotion();
     setStatusHands('OFFLINE');
+    if ($('mode-status')) $('mode-status').textContent='MODE: TACTILE';
+    document.body.classList.remove('camera-active');
+    drawPreviewLandmarks(null);
+    describeGesture('Caméra inactive · dessin tactile disponible');
     $('camera-btn').textContent = 'Activer la caméra';
+    if ($('camera-quick')) $('camera-quick').textContent='Caméra';
     status('READY (CAMERA OFF)');
   }
   async function toggleCamera() {
     if (cameraEnabled) { stopCamera(); ui('Caméra arrêtée.'); return; }
     if (cameraStarting) return;
     cameraStarting = true;
-    if (typeof Hands === 'undefined') { cameraStarting = false; ui('MediaPipe non chargé. Vérifie Internet.'); return; }
+    status('CHARGEMENT DES GESTES');
+    ui('Chargement du moteur de reconnaissance des mains…');
+    if (!(await ensureHandsLibrary())) {
+      cameraStarting = false;
+      status('TACTILE READY');
+      setStatusHands('LIBRARY ERROR');
+      ui('MediaPipe inaccessible sur les 2 serveurs. Le dessin au doigt reste disponible ; vérifie Internet, désactive un bloqueur si présent, puis réessaie.');
+      return;
+    }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { cameraStarting = false; ui('Caméra indisponible sur ce navigateur.'); return; }
     try {
       status('STARTING CAMERA');
       video = document.querySelector('.input_video');
       video.muted = true; video.playsInline = true;
       if (!hands) {
-        hands = new Hands({ locateFile: (file) =>
-          'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/' + file });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: .65, minTrackingConfidence: .65 });
+        hands = new Hands({ locateFile: (file) => handAssetsBase + file });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: .55, minTrackingConfidence: .55 });
         hands.onResults(onHandResults);
       }
       cameraStream = await navigator.mediaDevices.getUserMedia({
@@ -347,8 +529,13 @@
       });
       video.srcObject = cameraStream;
       await video.play();
-      cameraEnabled = true; tracking = false; resetMotion();
+      cameraEnabled = true; tracking = false; cameraErrors=0; resetMotion();
+      document.body.classList.add('camera-active');
+      if ($('camera-preview')) $('camera-preview').classList.toggle('mirror', mirrorCamera);
       $('camera-btn').textContent = 'Arrêter la caméra';
+      if ($('camera-quick')) $('camera-quick').textContent='Stop caméra';
+      if ($('mode-status')) $('mode-status').textContent='MODE: RECHERCHE MAIN';
+      describeGesture('Caméra active · montre ta main');
       status('CAMERA READY');
       ui('Rapproche le pouce et l’index pour peindre. Écarte-les pour arrêter le tracé.');
       trackCamera();
@@ -365,12 +552,21 @@
       e.preventDefault(); pointerDown = true;
       layer.setPointerCapture(e.pointerId);
       const [x,y] = coords(e); endStroke(); startStroke(x,y);
+      const cursor=$('touch-cursor');
+      if (cursor) { cursor.style.display='block'; cursor.style.left=e.clientX+'px';cursor.style.top=e.clientY+'px'; }
+      if ($('mode-status')) $('mode-status').textContent='MODE: DESSIN TACTILE';
     });
     layer.addEventListener('pointermove', (e) => {
       if (!pointerDown) return;
       e.preventDefault(); const [x,y] = coords(e); moveStroke(x,y);
+      const cursor=$('touch-cursor');
+      if (cursor) { cursor.style.left=e.clientX+'px';cursor.style.top=e.clientY+'px'; }
     });
-    const finish = () => { pointerDown = false; endStroke(); };
+    const finish = () => {
+      pointerDown = false; endStroke();
+      const cursor=$('touch-cursor'); if (cursor) cursor.style.display='none';
+      if ($('mode-status')) $('mode-status').textContent=cameraEnabled ? 'MODE: MAIN' : 'MODE: TACTILE';
+    };
     layer.addEventListener('pointerup', finish);
     layer.addEventListener('pointercancel', finish);
     layer.addEventListener('lostpointercapture', finish);
@@ -430,8 +626,18 @@
   }
   function bindUI() {
     $('camera-btn').addEventListener('click', toggleCamera);
+    if ($('camera-quick')) $('camera-quick').addEventListener('click', toggleCamera);
+    if ($('test-btn')) $('test-btn').addEventListener('click', drawDemo);
+    if ($('test-quick')) $('test-quick').addEventListener('click', drawDemo);
+    if ($('tools-toggle')) $('tools-toggle').addEventListener('click', () => {
+      const hud=$('hud'), toggle=$('tools-toggle');
+      const visible=hud.classList.toggle('expanded');
+      toggle.setAttribute('aria-expanded',String(visible));
+      toggle.textContent=visible ? 'Fermer les outils ▴' : 'Outils ▾';
+    });
     $('mirror-toggle').addEventListener('change', (e) => {
       mirrorCamera = e.target.checked; resetMotion();
+      if ($('camera-preview')) $('camera-preview').classList.toggle('mirror', mirrorCamera);
       ui(mirrorCamera ? 'Caméra en miroir.' : 'Caméra sans miroir.');
     });
     $('gesture-rotate').addEventListener('change', (e) => {
@@ -480,7 +686,12 @@
       }
     });
     window.addEventListener('pagehide', stopCamera);
-    updateColor(brushColor);
+    // Synchronise les valeurs natives, y compris si le navigateur restaure les champs.
+    brushMode=$('brush-mode').value;
+    brushSize=clamp(Number($('brush-size').value)||.7,.1,2.5);
+    $('size-value').textContent=brushSize.toFixed(1);
+    updateColor($('brush-color').value || brushColor);
+    setupPalette();
     updateCount();
     setupVoice();
     installPointer();
@@ -489,7 +700,7 @@
     if (!setupThree()) return;
     bindUI();
     try { localStorage.removeItem('niko_mistral_key'); } catch (_) { /* pas de stockage */ }
-    ui('Atelier prêt. Dessine au doigt ou à la souris. La caméra et l’IA sont facultatives.');
+    ui('Atelier prêt. La zone centrale accepte le doigt ou la souris. Utilise « Test dessin » pour vérifier le rendu.');
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js')
       .catch((e) => console.warn('Service worker indisponible', e));
   }
