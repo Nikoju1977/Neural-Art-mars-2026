@@ -1,16 +1,18 @@
 {
- "name": "Neural-Art-mars-2026",
- "short_name": "Neural-Art-m",
- "start_url": ".",
- "display": "standalone",
- "background_color": "#050a0d",
- "theme_color": "#050a0d",
- "icons": [
-  {
-   "src": "icon.svg",
-   "sizes": "any",
-   "type": "image/svg+xml",
-   "purpose": "any"
-  }
- ]
+  "name": "Neural Art V20 — Studio Niko",
+  "short_name": "Neural Art",
+  "description": "Atelier de peinture holographique 3D gestuelle et tactile",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#01060b",
+  "theme_color": "#041017",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
 }
