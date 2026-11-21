@@ -1,872 +1,164 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>NIKO | ATELIER NEURAL V19 - THE PERFECT MIRROR (AR)</title>
-    
-    <script>/* Studio Niko · helpers vague C */
-window.safeStorage = window.safeStorage || (function(){var mem=new Map(),ls=null;try{ls=window.localStorage;var t='__niko__';ls.setItem(t,'1');ls.removeItem(t);}catch(e){ls=null;}
-return{getItem:function(k){try{return ls?ls.getItem(k):(mem.has(k)?mem.get(k):null);}catch(e){return mem.has(k)?mem.get(k):null;}},
-setItem:function(k,v){try{if(ls){ls.setItem(k,String(v));return;}}catch(e){}mem.set(k,String(v));},
-removeItem:function(k){try{if(ls)ls.removeItem(k);}catch(e){}mem.delete(k);},
-clear:function(){try{if(ls)ls.clear();}catch(e){}mem.clear();},
-key:function(i){try{if(ls)return ls.key(i);}catch(e){}var a=Array.from(mem.keys());return i<a.length?a[i]:null;},
-get length(){try{if(ls)return ls.length;}catch(e){}return mem.size;}};})();
-window.nikoFetch = window.nikoFetch || function(url,opts){function xhr(){opts=opts||{};return new Promise(function(res,rej){var x=new XMLHttpRequest();x.open((opts.method||'GET'),url,true);if(opts.headers){Object.keys(opts.headers).forEach(function(h){x.setRequestHeader(h,opts.headers[h]);});}x.onload=function(){res({ok:x.status>=200&&x.status<300,status:x.status,json:function(){return Promise.resolve(JSON.parse(x.responseText))}});};x.onerror=function(){rej(new Error('XHR failed'));};if(opts.body)x.send(opts.body);else x.send();});return new Promise(function(res,rej){if(opts.signal){opts.signal.addEventListener('abort',function(){rej(new Error('AbortError'));});}xhr().then(res).catch(rej);});}
-if(window.fetch){return window.fetch(url,opts).catch(function(){return xhr();});}return xhr();};
-</script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-
-/* ── AbortController + Retry + Debounce — Studio Niko Design ── */
-const nikoFetch = (() => {
-  let _ctrl = null;
-  return async function(url, opts={}, retries=3) {
-    if(_ctrl) _ctrl.abort();
-    _ctrl = new AbortController();
-    opts.signal = _ctrl.signal;
-    for(let i=0; i<retries; i++) {
-      try {
-        const r = await (window.fetch || window.nikoFetch)(url, opts);
-        if(!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r;
-      } catch(e) {
-        if(e.name==='AbortError') throw e;
-        if(i===retries-1) throw e;
-        await new Promise(res=>setTimeout(res, 800*(i+1)));
-      }
-    }
-  };
-})();
-
-function nikoDebounce(fn, ms=400) {
-  let t; return (...a) => { clearTimeout(t); t=setTimeout(()=>fn(...a), ms); };
-}
-
-function nikoRetryBtn(container, fn) {
-  const btn = document.createElement('button');
-  btn.textContent = '↺ Réessayer';
-  btn.style.cssText='margin-top:8px;padding:6px 14px;background:rgba(0,255,157,.15);border:1px solid #00ff9d;color:#00ff9d;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px';
-  btn.onclick = () => { btn.remove(); fn(); };
-  if(container) container.appendChild(btn);
-}
-
-</script>
-    <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/webgazer.js/0.9.0/webgazer.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4.1633559310/camera_utils.js" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/hands.js" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.4.1633559310/drawing_utils.js" crossorigin="anonymous"></script>
-
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); 
-            margin: 0; 
-            background: #000; 
-            overflow: hidden; 
-            font-family: 'Orbitron', sans-serif; 
-            touch-action: none; 
-        }
-        
-        #canvas { display: block; }
-        
-        #hud { 
-            position: absolute; 
-            top: 20px; 
-            left: 20px; 
-            color: #00f2ff; 
-            pointer-events: auto; 
-            border-left: 2px solid #00f2ff; 
-            padding-left: 15px; 
-            z-index: 10; 
-            text-shadow: 0 0 5px rgba(0, 242, 255, 0.8);
-        }
-        
-        .stat { 
-            font-size: max(10px, 1vw); 
-            margin-bottom: 5px; 
-            letter-spacing: 2px; 
-        }
-        
-        .hud-btn { 
-            cursor: pointer; 
-            opacity: 0.8; 
-            transition: 0.2s; 
-            margin-top: 10px; 
-            display: inline-block; 
-        }
-        
-        .hud-btn:hover { 
-            opacity: 1; 
-            text-shadow: 0 0 8px #00f2ff; 
-        }
-        
-        #ai-terminal { 
-            position: absolute; 
-            bottom: 30px; 
-            left: 50%; 
-            transform: translateX(-50%); 
-            width: 80%; 
-            max-width: 800px; 
-            z-index: 20; 
-            background: rgba(0, 15, 20, 0.6); 
-            border: 1px solid #00f2ff;
-            padding: 15px;
-            border-radius: 5px;
-        }
-        
-        #chat-log { 
-            color: #00f2ff; 
-            font-size: 14px; 
-            min-height: 20px; 
-            max-height: 100px; 
-            overflow-y: auto; 
-            text-shadow: 0 0 5px #00f2ff; 
-            line-height: 1.4; 
-        }
-        
-        #auth-panel { 
-            position: absolute; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%); 
-            background: rgba(0, 15, 20, 0.95); 
-            border: 2px solid #ffaa00; 
-            box-shadow: 0 0 30px rgba(255, 170, 0, 0.5);
-            padding: 30px;
-            border-radius: 10px;
-            z-index: 100;
-            min-width: 300px;
-        }
-        
-        #auth-panel h2 { 
-            color: #ffaa00; 
-            margin: 0 0 20px 0; 
-            font-size: 18px; 
-            letter-spacing: 3px; 
-        }
-        
-        #api-key-input { 
-            background: rgba(0, 0, 0, 0.6); 
-            border: 1px solid #00f2ff; 
-            color: #00f2ff; 
-            padding: 12px; 
-            font-family: 'Orbitron', sans-serif; 
-            outline: none; 
-            text-align: center; 
-            letter-spacing: 1px;
-            width: 100%;
-            box-sizing: border-box;
-            margin-bottom: 15px;
-        }
-        
-        #auth-btn { 
-            background: #00f2ff; 
-            color: #000; 
-            border: none; 
-            padding: 12px 20px; 
-            font-family: 'Orbitron', sans-serif; 
-            font-weight: bold; 
-            cursor: pointer; 
-            transition: 0.3s; 
-            letter-spacing: 2px;
-            width: 100%;
-        }
-        
-        #auth-btn:hover { 
-            background: #fff; 
-            box-shadow: 0 0 20px #00f2ff; 
-        }
-        
-        .color-indicator { 
-            display: inline-block; 
-            width: 10px; 
-            height: 10px; 
-            border-radius: 50%; 
-            margin-left: 5px; 
-            box-shadow: 0 0 8px currentColor; 
-        }
-        
-        #interaction-layer { 
-            position: absolute; 
-            top:0; 
-            left:0; 
-            width: 100vw; 
-            height: 100dvh; 
-            z-index: 1; 
-        }
-        
-        .input_video { 
-            display: none; 
-        }
-        
-        #webgazerVideoFeed {
-            display: none !important;
-        }
-    
-  /* Studio Niko — Loading State */
-  .niko-loading{position:fixed;inset:0;background:rgba(5,10,13,.85);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px)}
-  .niko-loading-ring{width:48px;height:48px;border:3px solid rgba(0,255,157,.2);border-top-color:#00ff9d;border-radius:50%;animation:niko-spin .8s linear infinite}
-  @keyframes niko-spin{to{transform:rotate(360deg)}}
-  .niko-loading.hidden{opacity:0;pointer-events:none;transition:opacity .3s}
-
-/* ── Skeleton Loader ─────────────────────────── */
-.skeleton{background:linear-gradient(90deg,rgba(0,255,157,.07) 25%,rgba(0,255,157,.15) 50%,rgba(0,255,157,.07) 75%);background-size:200% 100%;animation:skel-wave 1.4s infinite;border-radius:6px;min-height:12px}
-@keyframes skel-wave{0%{background-position:200% 0}100%{background-position:-200% 0}}
-
-
-/* ── GPU acceleration hints ── */
-@media (prefers-reduced-motion: no-preference) {
-  [class*="btn"],[class*="button"],[class*="card"],[class*="modal"],[class*="tab"],[class*="panel"] {
-    will-change: transform, opacity;
-    transform: translateZ(0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; }
-}
-
-
-/* ── Dark mode system preference — Studio Niko Design ── */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f0f4f8;
-    --bg2: #e2e8f0;
-    --text: #1a202c;
-    --accent: #0070f3;
-  }
-  body { background: var(--bg); color: var(--text); }
-}
-
-</style>
-<script>
-
-/* ── safeStorage AES-256-GCM — Studio Niko Design ─────────────────
-   Drop-in secure replacement for safeStorage.
-   Keys never leave the browser unencrypted.
-   Usage: await safeStorage.setItem(key, value)
-          await safeStorage.getItem(key)
-          await safeStorage.removeItem(key)
-──────────────────────────────────────────────────────────────────── */
-const safeStorage = window.safeStorage; /* facade synchrone Studio Niko */
-
-</script>
-
-  <meta name="description" content="Neural Art — Application de peinture numérique IA avec brosses à physique de ressort et rendu WebGL.">
-  <meta name="author" content="Nicolas Julienne — Studio Niko Design">
-  <meta name="theme-color" content="#ff0080" media="(prefers-color-scheme: dark)">
-  <meta property="og:title" content="Neural Art 2026 | Studio Niko Design">
-  <meta property="og:description" content="Peinture numérique IA — 10 brosses, physique ressort, WebGL, 16 modes de fusion, export SVG">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#041017">
+  <meta name="description" content="Neural Art V20 Studio Niko : peinture gestuelle et tactile 3D gratuite, tracés fluides, export PNG et GLTF, caméra MediaPipe et voix optionnelles.">
+  <meta property="og:title" content="Neural Art V20 | Studio Niko">
+  <meta property="og:description" content="Atelier de peinture holographique gestuelle en 3D — gratuit sans clé IA.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://nikoju1977.github.io/Neural-Art-mars-2026/">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Neural Art 2026 | Studio Niko Design">
-  <meta name="twitter:description" content="Peinture numérique IA — 10 brosses, physique ressort, WebGL, 16 modes de fusion, export SVG">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-<link rel="manifest" href="manifest.json">
+  <title>NEURAL ART V20 — STUDIO NIKO</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: dark; --accent:#00f2ff; --pink:#f95bca; --bg:#06131d; --border:#1b5264; --text:#e5f6fc; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#01060b; color:var(--text); font:13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    button,input,select { font:inherit; }
+    button { cursor:pointer; touch-action:manipulation; }
+    button:disabled { opacity:.4; cursor:not-allowed; }
+    button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+    #neural-canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:0; }
+    #interaction-layer { position:fixed; inset:0; z-index:1; touch-action:none; cursor:crosshair; }
+    #app { position:fixed; inset:0; pointer-events:none; z-index:2; }
+    #app > * { pointer-events:auto; }
+    #hud { position:absolute; left:max(12px,env(safe-area-inset-left)); top:max(12px,env(safe-area-inset-top)); width:min(365px,calc(100vw - 24px)); padding:13px 14px 12px; border-radius:15px; background:linear-gradient(135deg,rgba(3,20,30,.94),rgba(3,16,26,.87)); border:1px solid rgba(0,242,255,.32); box-shadow:0 20px 65px #0009; backdrop-filter:blur(16px); max-height:calc(100dvh - 130px); overflow-y:auto; scrollbar-width:thin; }
+    .brand { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
+    h1 { font-size:17px; line-height:1.1; letter-spacing:.12em; margin:0; color:#e4fdff; }
+    h1 span { color:var(--accent); }
+    .version { font-size:10px; letter-spacing:.1em; border:1px solid #2d6171; color:#9bcbd4; padding:3px 7px; border-radius:9px; }
+    .subtitle { color:#89aebb; font-size:11px; margin:0 0 9px; }
+    .status-bar { display:flex; flex-wrap:wrap; gap:6px; margin:5px 0 11px; }
+    .stat { display:inline-flex; font-size:10px; letter-spacing:.025em; border:1px solid #265363; background:#0c2632; color:#a9dbe4; border-radius:7px; padding:4px 7px; }
+    #status { color:#60f3b7; }
+    #hand-status { color:#ffc66a; }
+    .quick { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-bottom:9px; }
+    button.action { border-radius:9px; color:#e4fbff; background:#123342; border:1px solid #357080; padding:10px 7px; font-weight:650; min-height:40px; }
+    button.action:hover { background:#1a4659; }
+    button.action.primary { background:#00849a; border-color:#27d9f3; color:white; }
+    button.action.danger { background:#40202d; border-color:#954362; }
+    details.settings { border-top:1px solid #284657; margin-top:9px; padding-top:9px; }
+    summary { cursor:pointer; font-weight:750; letter-spacing:.04em; color:#b8eff4; padding:4px 0; }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; padding:10px 0 4px; align-items:end; }
+    label { display:flex; flex-direction:column; gap:5px; font-size:11px; color:#abcfd9; }
+    input[type="color"],input[type="range"],select,input[type="password"],input[type="text"] { width:100%; min-height:33px; background:#051b26; color:#e8faff; border:1px solid #346575; border-radius:7px; }
+    input[type="color"] { padding:3px; }
+    input[type="range"] { min-height:25px; accent-color:#00daf0; }
+    input[type="password"],input[type="text"] { padding:8px; }
+    .switch { flex-direction:row; align-items:center; min-height:31px; }
+    .switch input { accent-color:#00daf0; width:18px; height:18px; }
+    .full { grid-column:1/-1; }
+    .hint { font-size:11px; color:#80a6b4; margin:6px 0; }
+    .row-buttons { display:flex; gap:7px; margin:8px 0 3px; }
+    .row-buttons > button { flex:1; }
+    #ai-terminal { position:absolute; bottom:max(12px,env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); width:min(720px,calc(100vw - 24px)); background:rgba(3,19,29,.87); border:1px solid rgba(0,242,255,.35); border-radius:12px; padding:9px 12px; backdrop-filter:blur(14px); box-shadow:0 15px 45px #0008; }
+    #chat-log { overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; max-height:68px; color:#b2ebef; font-size:12px; }
+    #ai-terminal details { margin-top:3px; }
+    #ai-terminal summary { font-size:11px; }
+    .ai-fields { display:flex; gap:7px; margin-top:8px; }
+    .ai-fields input { flex:1; min-width:0; }
+    .ai-fields button { width:76px; }
+    #hand-cursor { position:fixed; z-index:3; width:26px; height:26px; margin:-13px 0 0 -13px; border-radius:50%; border:2px solid #aefcff; box-shadow:0 0 0 6px #00f2ff22,0 0 18px #00e0ff9c; pointer-events:none; transition:left 25ms linear,top 25ms linear,transform .1s; }
+    #hand-cursor[hidden] { display:none!important; }
+    #hand-cursor.drawing { transform:scale(.68); border-color:#ff9ccc; background:#ff5cc488; box-shadow:0 0 0 7px #ff73d433,0 0 18px #ff7bdd; }
+    .input_video { display:none!important; }
+    #ar-container button { margin:5px 0; max-width:100%; border-radius:9px!important; }
+    .note { font-size:10px; color:#84aab7; padding:6px 0; }
+    #studio-help p { margin:8px 0; font-size:12px; color:#c4e0e5; }
+    @media(max-width:600px) {
+      #hud { padding:11px 12px; max-height:calc(100dvh - 112px); width:min(340px,calc(100vw - 24px)); }
+      #hud h1 { font-size:15px; }
+      .subtitle { font-size:10px; }
+      #ai-terminal { bottom:max(7px,env(safe-area-inset-bottom)); padding:8px 10px; }
+      #chat-log { max-height:36px; font-size:11px; }
+      button.action { padding:8px 5px; font-size:11px; }
+    }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; } }
+  </style>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/hands.js"></script>
+  <script defer src="./neural-v20.js?v=20.1"></script>
 </head>
-<body role="application" aria-label="Neural Art — Peinture numérique IA">
-<main id="app" tabindex="-1">
-<h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">Neural Art</h1>
-
-
-    <div id="interaction-layer"></div>
-    <video class="input_video"></video>
-
-    <div id="auth-panel">
-        <h2>> OMNI-MATRICE ENCRYPTED</h2>
-        <div style="color: #00f2ff; font-size: 12px; margin-bottom: 10px;">ENTER MISTRAL API KEY</div>
-        <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off" />
-        <button id="auth-btn">AUTHORIZE</button>
-        <div style="color: #ff0055; font-size: 10px; margin-top: 15px; text-align: center;">Camera permissions required</div>
-    </div>
-
-    <div id="hud">
-        <div class="stat">OPERATOR: NIKO</div>
-        <div class="stat" id="status">STATUS: STANDBY</div>
-        <div class="stat">BRUSH COLOR: <span id="brush-color-text" style="color:#00f2ff;">CYAN</span><span class="color-indicator" id="brush-color-dot" style="background-color:#00f2ff; color:#00f2ff;"></span></div>
-        <div class="stat" id="hand-status">HANDS: OFFLINE</div>
-        <div class="stat" id="stroke-count">STROKES: 0</div>
-        <div class="stat hud-btn" id="voice-btn">[ VOICE LINK : OFF ]</div><br>
-        <div class="stat hud-btn" id="clear-paint-btn">[ CLEAR CANVAS ]</div><br>
-        <div class="stat hud-btn" id="export-btn" style="color:#ffaa00;">[ EXPORT TO 3D FILE ]</div><br>
-        <div id="ar-container" style="margin-top: 10px;"></div>
-        <div class="stat" id="reset-key-btn" style="cursor:pointer; font-size:10px; color:#ff0055; margin-top:10px;">[ PURGE API KEY ]</div>
-    </div>
-
-    <div id="ai-terminal">
-        <div id="chat-log">> WAITING FOR SECURE LINK...</div>
-    </div>
-
-    <script id="vShader" type="x-shader/x-vertex">
-        uniform float uTime; uniform float uAudio; varying vec3 vColor;
-        void main() {
-            vec3 pos = position; float angle = uTime * 0.2 + length(pos.xz) * 0.05;
-            float s = sin(angle); float c = cos(angle); pos.xz *= mat2(c, -s, s, c);
-            pos.y += sin(uTime + pos.x) * uAudio * 3.0;
-            vColor = vec3(0.0, 0.3, 0.4); 
-            vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
-            gl_PointSize = (2.0 + uAudio * 2.0) * (200.0 / -mvPos.z);
-            gl_Position = projectionMatrix * mvPos;
-        }
-    </script>
-    <script id="fShader" type="x-shader/x-fragment">
-        varying vec3 vColor; void main() { if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard; gl_FragColor = vec4(vColor, 0.4); }
-    </script>
-
-    <script>
-        /* ── Defer initialization until all libs are loaded ── */
-        let scene, camera, renderer, backgroundVortex, paintGroup;
-        let currentBrushColorHex = 0x00f2ff;
-        let isPinching = false;
-        let handsTrackingActive = false;
-        let gazeTarget = { x: 0, y: 0 };
-        let strokeCount = 0;
-        let handsProcessingActive = false;
-        let videoElement, hands;
-        
-        const colorDictionary = {
-            'rose': 0xff00ff, 'rouge': 0xff0000, 'bleu': 0x0088ff, 'vert': 0x00ff00,
-            'jaune': 0xffff00, 'violet': 0xbd00ff, 'orange': 0xffaa00, 'blanc': 0xffffff,
-            'cyan': 0x00f2ff, 'or': 0xffd700, 'magenta': 0xff00aa
-        };
-
-        function initThree() {
-            scene = new THREE.Scene(); 
-            scene.background = new THREE.Color(0x000000);
-            
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-            camera.position.z = 50;
-            
-            renderer = new THREE.WebGLRenderer({ 
-                antialias: true, 
-                alpha: false, 
-                preserveDrawingBuffer: true,
-                powerPreference: 'high-performance'
-            });
-            renderer.setSize(window.innerWidth, window.innerHeight); 
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.xr.enabled = true;
-            renderer.shadowMap.enabled = true;
-            document.body.appendChild(renderer.domElement);
-
-            // AR Button
-            try {
-                if (typeof ARButton !== 'undefined') {
-                    const arButton = ARButton.createButton(renderer, { 
-                        requiredFeatures: ['hit-test'],
-                        optionalFeatures: ['dom-overlay', 'dom-overlay-for-handheld-ar'],
-                        domOverlay: { root: document.body }
-                    });
-                    arButton.style.position = 'relative';
-                    arButton.style.bottom = 'auto';
-                    arButton.style.fontFamily = 'Orbitron';
-                    arButton.style.backgroundColor = 'transparent';
-                    arButton.style.color = '#bd00ff';
-                    arButton.style.border = '1px solid #bd00ff';
-                    arButton.innerText = "[ INVERT MATRIX (AR) ]";
-                    document.getElementById('ar-container').appendChild(arButton);
-                }
-            } catch(e) {
-                console.warn('ARButton not available:', e);
-            }
-
-            // Background vortex
-            const geo = new THREE.BufferGeometry(); 
-            const pos = new Float32Array(15000);
-            for(let i=0; i<15000; i++) pos[i] = (Math.random()-0.5) * 150;
-            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-            
-            const mat = new THREE.ShaderMaterial({
-                uniforms: { uTime: {value: 0}, uAudio: {value: 0} },
-                vertexShader: document.getElementById('vShader').textContent, 
-                fragmentShader: document.getElementById('fShader').textContent,
-                transparent: true, 
-                blending: THREE.AdditiveBlending, 
-                depthTest: false
-            });
-            backgroundVortex = new THREE.Points(geo, mat); 
-            scene.add(backgroundVortex);
-
-            paintGroup = new THREE.Group();
-            scene.add(paintGroup);
-
-            window.addEventListener('resize', onWindowResize);
-            renderer.setAnimationLoop(animateThree);
-            
-            document.getElementById('status').innerText = "STATUS: READY";
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight; 
-            camera.updateProjectionMatrix(); 
-            renderer.setSize(window.innerWidth, window.innerHeight); 
-        }
-
-        function animateThree(t) {
-            if (!backgroundVortex) return;
-            backgroundVortex.material.uniforms.uTime.value = (t || 0) * 0.001;
-            
-            if (!renderer.xr.isPresenting) {
-                backgroundVortex.visible = true;
-                if (typeof gsap !== 'undefined') {
-                    gsap.to(backgroundVortex.rotation, { 
-                        x: gazeTarget.y * 0.3, 
-                        y: gazeTarget.x * 0.3, 
-                        duration: 1.0 
-                    });
-                    gsap.to(paintGroup.rotation, { 
-                        x: gazeTarget.y * -0.1, 
-                        y: gazeTarget.x * -0.1, 
-                        duration: 1.5 
-                    });
-                }
-            } else {
-                backgroundVortex.visible = false;
-                paintGroup.position.set(0, 0, -50); 
-                paintGroup.rotation.y += 0.005;
-            }
-            
-            renderer.render(scene, camera);
-        }
-
-        function initOptics() {
-            document.getElementById('status').innerText = "STATUS: INITIALIZING BIOSENSORS...";
-            initHands();
-        }
-
-        // MediaPipe Hands Setup
-        async function setupMediaPipeHands() {
-            if (typeof Hands === 'undefined') {
-                console.warn('MediaPipe Hands not loaded');
-                return false;
-            }
-            
-            videoElement = document.querySelector('.input_video');
-            hands = new Hands({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1633559310/${file}`
-            });
-            
-            hands.setOptions({ 
-                maxNumHands: 1, 
-                modelComplexity: 1, 
-                minDetectionConfidence: 0.7, 
-                minTrackingConfidence: 0.7 
-            });
-            
-            hands.onResults((results) => {
-                if (renderer.xr.isPresenting) return;
-                
-                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                    handsTrackingActive = true;
-                    document.getElementById('hand-status').innerText = "HANDS: ACTIVE";
-                    
-                    const landmarks = results.multiHandLandmarks[0];
-                    const indexTip = landmarks[8];
-                    const thumbTip = landmarks[4];
-                    
-                    const distance = Math.sqrt(
-                        Math.pow(indexTip.x - thumbTip.x, 2) + 
-                        Math.pow(indexTip.y - thumbTip.y, 2)
-                    );
-                    
-                    if (distance < 0.05) {
-                        if (!isPinching) isPinching = true;
-                        drawPaintStroke(indexTip.x, indexTip.y);
-                    } else { 
-                        isPinching = false; 
-                    }
-                } else {
-                    handsTrackingActive = false;
-                    document.getElementById('hand-status').innerText = "HANDS: OFFLINE";
-                    isPinching = false;
-                }
-            });
-            
-            return true;
-        }
-
-        async function initHands() {
-            try {
-                const handsReady = await setupMediaPipeHands();
-                if (!handsReady) {
-                    document.getElementById('hand-status').innerText = "HANDS: NOT LOADED";
-                    document.getElementById('status').innerText = "STATUS: READY (NO HANDS)";
-                    return;
-                }
-                
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'user',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    } 
-                });
-                
-                videoElement.srcObject = stream;
-                videoElement.onloadedmetadata = () => {
-                    videoElement.play();
-                    handsProcessingActive = true;
-                    processHandsFrame();
-                    document.getElementById('status').innerText = "STATUS: FULL BIO-SYNC (HANDS)";
-                };
-            } catch (e) {
-                console.error("Camera error:", e);
-                document.getElementById('hand-status').innerText = "HANDS: CAMERA ERROR";
-                document.getElementById('status').innerText = "STATUS: CAMERA ACCESS DENIED";
-            }
-        }
-
-        async function processHandsFrame() {
-            if (!handsProcessingActive || !videoElement || !hands) return;
-            
-            if (!videoElement.paused && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-                try {
-                    await hands.send({ image: videoElement });
-                } catch(e) {
-                    console.error('Hands processing error:', e);
-                }
-            }
-            requestAnimationFrame(processHandsFrame);
-        }
-
-        function drawPaintStroke(x, y) {
-            if (!renderer || !camera || !paintGroup) return;
-            
-            const vector = new THREE.Vector3(
-                (x * 2) - 1, 
-                -(y * 2) + 1, 
-                0.5
-            );
-            
-            vector.unproject(camera);
-            const dir = vector.sub(camera.position).normalize();
-            
-            if (Math.abs(dir.z) > 0.001) {
-                const distance = -camera.position.z / dir.z;
-                const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-
-                const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-                const material = new THREE.MeshBasicMaterial({ 
-                    color: currentBrushColorHex, 
-                    transparent: true, 
-                    opacity: 0.8, 
-                    blending: THREE.AdditiveBlending 
-                });
-                const mesh = new THREE.Mesh(geometry, material);
-                
-                mesh.position.copy(pos);
-                mesh.position.applyMatrix4(
-                    new THREE.Matrix4()
-                        .copy(paintGroup.matrixWorld)
-                        .invert()
-                );
-                
-                mesh.rotation.set(
-                    Math.random() * Math.PI, 
-                    Math.random() * Math.PI, 
-                    0
-                );
-                
-                paintGroup.add(mesh);
-                strokeCount++;
-                document.getElementById('stroke-count').innerText = `STROKES: ${strokeCount}`;
-            }
-        }
-
-        // Voice Recognition
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition; 
-        let isVoiceMode = false;
-        
-        function setBrushColor(hex, name) {
-            currentBrushColorHex = hex;
-            document.getElementById('brush-color-text').innerText = name.toUpperCase();
-            document.getElementById('brush-color-text').style.color = '#' + hex.toString(16).padStart(6, '0');
-            document.getElementById('brush-color-dot').style.backgroundColor = '#' + hex.toString(16).padStart(6, '0');
-            document.getElementById('brush-color-dot').style.color = '#' + hex.toString(16).padStart(6, '0');
-        }
-
-        if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.lang = 'fr-FR';
-            recognition.interimResults = false;
-            
-            recognition.onresult = (event) => {
-                try {
-                    if (!event.results || event.results.length === 0) return;
-                    
-                    const lastResult = event.results[event.results.length - 1];
-                    if (!lastResult || !lastResult[0]) return;
-                    
-                    const transcript = lastResult[0].transcript.toLowerCase();
-                    let colorChanged = false;
-                    
-                    for (const [colorName, hexValue] of Object.entries(colorDictionary)) {
-                        if (transcript.includes(colorName)) { 
-                            setBrushColor(hexValue, colorName); 
-                            colorChanged = true; 
-                            break; 
-                        }
-                    }
-                    
-                    if (transcript.includes('efface')) { 
-                        document.getElementById('clear-paint-btn').click(); 
-                        colorChanged = true; 
-                    }
-                    if (transcript.includes('exporte')) { 
-                        document.getElementById('export-btn').click(); 
-                        colorChanged = true; 
-                    }
-
-                    if (!colorChanged && mistralApiKey) {
-                        askMistral(transcript);
-                    }
-                } catch(e) {
-                    console.error('Speech recognition error:', e);
-                }
-            };
-        }
-
-        document.getElementById('voice-btn').addEventListener('click', function() {
-            if (!recognition) return;
-            isVoiceMode = !isVoiceMode;
-            if (isVoiceMode) { 
-                this.innerText = "[ VOICE LINK : ON ]"; 
-                this.style.color = "#ffaa00"; 
-                try { recognition.start(); } catch(e){ console.warn('Recognition start error:', e); }
-            } else { 
-                this.innerText = "[ VOICE LINK : OFF ]"; 
-                this.style.color = "#00f2ff"; 
-                try { recognition.stop(); } catch(e){ console.warn('Recognition stop error:', e); }
-            }
-        });
-
-        document.getElementById('clear-paint-btn').addEventListener('click', () => {
-            while(paintGroup && paintGroup.children.length > 0){ 
-                let child = paintGroup.children[0];
-                if (child.material) child.material.dispose(); 
-                if (child.geometry) child.geometry.dispose();
-                paintGroup.remove(child); 
-            }
-            strokeCount = 0;
-            document.getElementById('stroke-count').innerText = "STROKES: 0";
-            updateTerminalMsg("> SYSTEM: CANVAS CLEARED.");
-        });
-
-        document.getElementById('export-btn').addEventListener('click', () => {
-            if (!paintGroup || paintGroup.children.length === 0) {
-                return updateTerminalMsg("> SYSTEM: CANVAS IS EMPTY.");
-            }
-            
-            updateTerminalMsg("> SYSTEM: INITIATING 3D MESH EXPORT...");
-            
-            if (typeof THREE.GLTFExporter === 'undefined') {
-                updateTerminalMsg("> SYSTEM: GLTF EXPORTER NOT READY");
-                return;
-            }
-            
-            const exporter = new THREE.GLTFExporter();
-            
-            exporter.parse(paintGroup, function (gltf) {
-                const output = JSON.stringify(gltf, null, 2);
-                const blob = new Blob([output], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a'); 
-                link.href = url; 
-                link.download = 'Niko_Artwork_' + new Date().getTime() + '.gltf';
-                document.body.appendChild(link); 
-                link.click(); 
-                document.body.removeChild(link); 
-                URL.revokeObjectURL(url);
-                
-                updateTerminalMsg("> SYSTEM: EXPORT COMPLETE.");
-                if (mistralApiKey) {
-                    askMistral("Je viens d'exporter ma peinture holographique. Fais un bref commentaire.");
-                }
-            }, { binary: false });
-        });
-
-        // API Key Management
-        let mistralApiKey = safeStorage.getItem('niko_mistral_key') || "";
-        const authPanel = document.getElementById('auth-panel');
-        const apiKeyInput = document.getElementById('api-key-input');
-        const authBtn = document.getElementById('auth-btn');
-        const chatLog = document.getElementById('chat-log');
-        
-        function updateTerminalMsg(htmlContent) { 
-            chatLog.innerHTML = htmlContent; 
-            chatLog.scrollTop = chatLog.scrollHeight; 
-        }
-
-        if (mistralApiKey) { 
-            authPanel.style.display = 'none'; 
-            updateTerminalMsg("> MATRICE SECURED."); 
-            initThree();
-            initOptics(); 
-        } else {
-            initThree();
-        }
-
-        authBtn.addEventListener('click', () => {
-            if (apiKeyInput.value.trim()) {
-                mistralApiKey = apiKeyInput.value.trim(); 
-                safeStorage.setItem('niko_mistral_key', mistralApiKey);
-                authPanel.style.display = 'none'; 
-                updateTerminalMsg("> MATRICE SECURED."); 
-                initOptics();
-            }
-        });
-
-        document.getElementById('reset-key-btn').addEventListener('click', () => { 
-            safeStorage.removeItem('niko_mistral_key'); 
-            location.reload(); 
-        });
-
-        async function askMistral(prompt) {
-            updateTerminalMsg(`> NIKO: ${prompt}<br>> SYMBIOTE: <span style="color:#ffaa00;">THINKING...</span>`);
-            try {
-                const response = await nikoFetch('https://api.mistral.ai/v1/chat/completions', {
-                    method: 'POST', 
-                    headers: { 
-                        'Content-Type': 'application/json', 
-                        'Authorization': `Bearer ${mistralApiKey}` 
-                    },
-                    body: JSON.stringify({
-                        model: "mistral-small-latest",
-                        messages: [
-                            {
-                                role: "system", 
-                                content: "Tu es le Symbiote de l'Atelier Neural de l'artiste Niko. Nous sommes en 2026. L'utilisateur peint en 3D avec sa main. Réponds de manière poétique et mystérieuse, en moins de 50 mots."
-                            },
-                            {role: "user", content: prompt}
-                        ]
-                    })
-                });
-                
-                if (!response.ok) { 
-                    const errData = await response.json().catch(() => ({})); 
-                    throw new Error(`API ${response.status}: ${errData.message || 'Clé invalide.'}`); 
-                }
-                
-                const reply = (await response.json()).choices[0].message.content;
-                updateTerminalMsg(`> NIKO: ${prompt}<br>> SYMBIOTE: ${reply}`);
-                
-                if (window.speechSynthesis) {
-                    const u = new SpeechSynthesisUtterance(reply.replace(/[*_~`#]/g, '')); 
-                    u.lang = 'fr-FR'; 
-                    u.pitch = 0.8; 
-                    u.rate = 1.05; 
-                    window.speechSynthesis.speak(u);
-                }
-            } catch(e) { 
-                updateTerminalMsg(`> SYMBIOTE: <span style="color:red;">LINK SEVERED. Reason: ${e.message}</span>`); 
-            }
-        }
-
-        // Mouse fallback
-        document.getElementById('interaction-layer').addEventListener('mousemove', (e) => {
-            if(!handsTrackingActive) { 
-                gazeTarget.x = ((e.clientX / window.innerWidth) * 2 - 1); 
-                gazeTarget.y = -((e.clientY / window.innerHeight) * 2 - 1); 
-            }
-        });
-
-        // Touch support
-        document.getElementById('interaction-layer').addEventListener('touchmove', (e) => {
-            if (e.touches.length > 0) {
-                const touch = e.touches[0];
-                drawPaintStroke(touch.clientX / window.innerWidth, touch.clientY / window.innerHeight);
-            }
-        });
-
-        // Initialize when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                if (!renderer) initThree();
-            });
-        } else {
-            if (!renderer) initThree();
-        }
-    </script>
-
-<div class="niko-loading hidden" id="nikoLoader"><div class="niko-loading-ring"></div></div>
-
-</main>
-
-<script>
-if('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    const swCode = `
-const CACHE='niko-v1';
-const ASSETS=['./','/index.html'];
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
-self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>caches.match('/index.html')))));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
-    `;
-    const blob = new Blob([swCode],{type:'text/javascript'});
-    const swURL = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swURL).then(reg=>{
-      console.log('SW registered');
-      URL.revokeObjectURL(swURL);
-    }).catch(err=>{
-      console.warn('SW registration failed:', err);
-      URL.revokeObjectURL(swURL);
-    });
-  });
-}
-</script>
-<!-- STUDIO NIKO — MODE D'EMPLOI INTÉGRÉ. Conserver ce bloc lors d'une mise à jour. -->
-<style id="studio-niko-guide-style">
-#studio-niko-embedded-guide{all:initial!important;display:block!important;position:fixed!important;z-index:2147483000!important;right:max(12px,env(safe-area-inset-right,0px))!important;bottom:max(12px,env(safe-area-inset-bottom,0px))!important;width:auto!important;height:auto!important;max-width:calc(100vw - 24px)!important;font:13px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;color:#e9f5f4!important;direction:ltr!important}
-#studio-niko-embedded-guide *,#studio-niko-embedded-guide *::before,#studio-niko-embedded-guide *::after{box-sizing:border-box!important}
-#studio-niko-embedded-guide>summary{all:initial!important;display:flex!important;align-items:center!important;gap:9px!important;list-style:none!important;cursor:pointer!important;user-select:none!important;white-space:nowrap!important;border:1px solid #6ea4a8!important;border-radius:999px!important;background:#10303b!important;color:#efffff!important;padding:11px 15px!important;box-shadow:0 8px 35px #0009!important;font:700 12px/1.2 system-ui,sans-serif!important;letter-spacing:.015em!important}
-#studio-niko-embedded-guide>summary::-webkit-details-marker{display:none!important}
-#studio-niko-embedded-guide>summary:focus-visible{outline:3px solid #e9c38e!important;outline-offset:3px!important}
-#studio-niko-embedded-guide>summary .sn-guide-question{display:grid!important;place-items:center!important;width:23px!important;height:23px!important;border-radius:50%!important;background:#c1d9d7!important;color:#15222b!important;font:800 15px system-ui,sans-serif!important}
-#studio-niko-embedded-guide[open]>summary{background:#385363!important}
-#studio-niko-embedded-guide .sn-guide-sheet{all:initial!important;display:block!important;position:absolute!important;bottom:calc(100% + 10px)!important;right:0!important;width:min(405px,calc(100vw - 24px))!important;max-height:min(76vh,680px)!important;overflow-y:auto!important;overscroll-behavior:contain!important;border:1px solid #557e86!important;border-radius:13px!important;background:#0d2130!important;box-shadow:0 30px 100px #000c!important;padding:22px!important;color:#eaf3f4!important;font:13px/1.7 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;text-align:left!important}
-#studio-niko-embedded-guide .sn-guide-caption{display:block!important;font:800 9px/1.6 system-ui,sans-serif!important;letter-spacing:.12em!important;color:#85bdbf!important;margin:0 0 12px!important;text-transform:uppercase!important}
-#studio-niko-embedded-guide h2{all:unset!important;display:block!important;font:750 22px/1.25 system-ui,sans-serif!important;letter-spacing:-.035em!important;color:#fff!important;margin:0 0 12px!important}
-#studio-niko-embedded-guide h3{all:unset!important;display:block!important;font:750 13px/1.4 system-ui,sans-serif!important;color:#b9e1df!important;margin:20px 0 8px!important}
-#studio-niko-embedded-guide p,#studio-niko-embedded-guide li{all:unset!important;display:block!important;font:400 12px/1.8 system-ui,sans-serif!important;color:#c2d3dc!important;margin:0!important}
-#studio-niko-embedded-guide ol{all:unset!important;display:block!important;counter-reset:sn-help-step!important;margin:0!important;padding:0!important}
-#studio-niko-embedded-guide li{counter-increment:sn-help-step!important;display:flex!important;gap:11px!important;margin:9px 0!important}
-#studio-niko-embedded-guide li::before{content:counter(sn-help-step,decimal-leading-zero)!important;color:#98cbc8!important;font:700 11px/1.85 system-ui,sans-serif!important;flex:none!important}
-#studio-niko-embedded-guide .sn-guide-warning{display:block!important;margin-top:15px!important;border-left:3px solid #d6ba8f!important;padding:10px 13px!important;background:#342d29!important;color:#ecdec7!important;font:500 12px/1.7 system-ui,sans-serif!important}
-#studio-niko-embedded-guide .sn-guide-links{display:flex!important;flex-wrap:wrap!important;gap:8px!important;margin-top:18px!important;border-top:1px solid #3e5a68!important;padding-top:14px!important}
-#studio-niko-embedded-guide .sn-guide-links a{all:unset!important;display:inline-block!important;cursor:pointer!important;padding:9px 11px!important;border:1px solid #638f92!important;border-radius:5px!important;color:#def5f4!important;text-decoration:none!important;font:700 11px/1.4 system-ui,sans-serif!important}
-#studio-niko-embedded-guide .sn-guide-links a:hover{background:#254550!important}
-@media(max-width:480px){#studio-niko-embedded-guide .sn-guide-sheet{max-height:calc(100dvh - 115px)!important;padding:18px!important}}
-@media(prefers-reduced-motion:reduce){#studio-niko-embedded-guide *{transition:none!important;animation:none!important}}
-</style>
-<details id="studio-niko-embedded-guide" role="region" aria-label="Mode d'emploi de Neural-Art-mars-2026">
-  <summary><span class="sn-guide-question" aria-hidden="true">?</span> Mode d’emploi</summary>
-  <section class="sn-guide-sheet" aria-labelledby="studio-niko-guide-title">
-    <span class="sn-guide-caption">STUDIO NIKO / GUIDE INTÉGRÉ</span>
-    <h2 id="studio-niko-guide-title">Neural-Art-mars-2026</h2>
-    <p>Laboratoire de peinture numérique et de compositions WebGL.</p>
-    <h3>Premiers pas</h3>
-    <ol><li>Ouvrez l&#39;atelier et vérifiez les autorisations caméra si vous souhaitez les utiliser.</li><li>Choisissez un pinceau ou un mode visuel avant de commencer votre composition.</li><li>Exportez votre création ; les fonctions Mistral nécessitent une clé valide.</li></ol>
-    <h3>Avant de commencer</h3>
-    <p>Les performances varient selon le GPU du téléphone et les autorisations du navigateur.</p>
-    <div class="sn-guide-warning" role="note">La caméra et les appels IA sont conditionnés aux autorisations et à la configuration du service.</div>
-    <h3>En cas de problème</h3>
-    <p>En cas de page vide ou d&#39;erreur : rechargez une fois, vérifiez la connexion et les permissions ; sur une PWA déjà installée, fermez-la puis rouvrez-la pour actualiser son cache. Consultez le dépôt GitHub si le problème persiste.</p>
-    <div class="sn-guide-links">
-      <a href="https://github.com/Nikoju1977/Neural-Art-mars-2026" target="_blank" rel="noopener noreferrer">Documentation et code ↗</a>
-      <a href="https://studio-niko-hub.vercel.app/#catalogue" target="_blank" rel="noopener noreferrer">Studio Niko Hub ↗</a>
-    </div>
-  </section>
-</details>
-<!-- /STUDIO NIKO — MODE D'EMPLOI INTÉGRÉ -->
+<body>
+  <div id="interaction-layer" aria-label="Zone de dessin avec le doigt ou la souris"></div>
+  <div id="hand-cursor" hidden aria-hidden="true"></div>
+  <video class="input_video" playsinline muted aria-hidden="true"></video>
+  <main id="app">
+    <header id="hud" aria-label="Commandes de Neural Art">
+      <div class="brand"><h1>NEURAL <span>ART</span></h1><span class="version">V20.1 / STUDIO NIKO</span></div>
+      <p class="subtitle">Peinture holographique 3D • gestes • tactile • voix</p>
+      <div class="status-bar">
+        <span class="stat" id="status" role="status">STATUS: LOADING</span>
+        <span class="stat" id="hand-status">HANDS: OFFLINE</span>
+        <span class="stat" id="stroke-count">STROKES: 0</span>
+      </div>
+      <div class="quick">
+        <button class="action primary" id="camera-btn" type="button">Activer la caméra</button>
+        <button class="action" id="voice-btn" type="button">Activer la voix</button>
+        <button class="action" id="undo-btn" type="button">Annuler</button>
+        <button class="action" id="export-png-btn" type="button">Image PNG</button>
+        <button class="action" id="export-btn" type="button">Exporter 3D</button>
+        <button class="action danger" id="clear-paint-btn" type="button">Effacer</button>
+      </div>
+      <details class="settings">
+        <summary>Pinceaux et couleurs</summary>
+        <div class="form-grid">
+          <label>Couleur <input id="brush-color" type="color" value="#00f2ff"></label>
+          <label>Type de pinceau
+            <select id="brush-mode"><option value="neon">Néon lumineux</option><option value="sculpture">Sculpture 3D</option><option value="filament">Filament fin</option></select>
+          </label>
+          <label class="full">Épaisseur : <output id="size-value">0.7</output>
+            <input id="brush-size" type="range" min="0.1" max="2.5" step="0.1" value="0.7"></label>
+        </div>
+        <div class="hint">Couleur active : <span id="brush-color-text">#00f2ff</span> <span id="brush-color-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#00f2ff"></span></div>
+      </details>
+      <details class="settings">
+        <summary>Détection et mouvements</summary>
+        <div class="form-grid">
+          <label class="switch"><input id="mirror-toggle" type="checkbox" checked> Caméra miroir</label>
+          <label class="switch"><input id="gesture-rotate" type="checkbox"> Main ouverte : rotation</label>
+          <label class="full">Sensibilité au pincement : <output id="sensitivity-value">1.00</output>
+            <input type="range" id="tracking-sensitivity" min="0.7" max="1.5" step="0.05" value="1"></label>
+          <label class="full">Réactivité du suivi : <output id="smoothing-value">0.53</output>
+            <input type="range" id="motion-smoothing" min="0.25" max="1" step="0.05" value="0.53"></label>
+        </div>
+        <button class="action" type="button" id="reset-view">Réinitialiser la vue 3D</button>
+        <p class="hint">Pince pouce-index pour dessiner. Écarte les doigts pour déplacer la main sans peindre. Le cercle cyan indique la main suivie, le rose indique le dessin.</p>
+      </details>
+      <details class="settings" id="studio-help">
+        <summary>Mode d'emploi</summary>
+        <p><strong>Sans caméra :</strong> dessine avec ton doigt sur l'écran ou avec la souris.</p>
+        <p><strong>Avec caméra :</strong> autorise la caméra frontale, puis rapproche pouce et index pour peindre. Le suivi lisse les tremblements et ajuste la sensibilité à la taille de ta main.</p>
+        <p><strong>Mouvements :</strong> active « Main ouverte : rotation » pour orienter l'œuvre en déplaçant la paume sans pincer.</p>
+        <p><strong>Exports :</strong> PNG pour une image, GLTF pour réutiliser les objets 3D dans Blender. Les commandes vocales peuvent changer la couleur, effacer, annuler ou exporter.</p>
+        <p><strong>Confidentialité :</strong> la peinture et l'analyse des mains s'effectuent dans le navigateur ; l'assistant Mistral est optionnel et transmet uniquement les messages saisis quand il est activé.</p>
+      </details>
+      <div id="ar-container"></div>
+      <p class="note">Gratuit sans clé IA. Caméra optionnelle. Fonction AR selon l'appareil.</p>
+      <details class="settings">
+        <summary>Assistant IA facultatif</summary>
+        <p class="hint">Une clé API Mistral personnelle peut occasionner des frais. Elle n'est gardée qu'en mémoire pour l'onglet courant, mais les requêtes partent directement du navigateur.</p>
+        <label>Clé Mistral (non enregistrée)
+          <input type="password" id="mistral-key" autocomplete="off" placeholder="Saisir une clé API personnelle"></label>
+        <div class="row-buttons">
+          <button class="action" type="button" id="save-key-btn">Activer</button>
+          <button class="action danger" type="button" id="reset-key-btn">Effacer la clé</button>
+        </div>
+      </details>
+    </header>
+    <section id="ai-terminal" aria-label="Messages de l'atelier">
+      <div id="chat-log" role="status" aria-live="polite">> Chargement du moteur…</div>
+      <details>
+        <summary>Discuter avec l'assistant IA (optionnel)</summary>
+        <div class="ai-fields">
+          <input type="text" id="ai-prompt" maxlength="400" placeholder="Demander un conseil artistique…">
+          <button type="button" class="action" id="ai-send">Envoyer</button>
+        </div>
+      </details>
+    </section>
+  </main>
 </body>
 </html>
