@@ -526,68 +526,84 @@
   async function toggleCamera() {
     if (cameraEnabled) { stopCamera(); ui('Caméra arrêtée.'); return; }
     if (cameraStarting) return;
-    cameraStarting = true;
-    status('CHARGEMENT DES GESTES');
-    ui('Chargement du moteur de reconnaissance des mains…');
-    if (!(await ensureHandsLibrary())) {
-      cameraStarting = false;
-      status('TACTILE READY');
-      setStatusHands('LIBRARY ERROR');
-      ui('MediaPipe inaccessible sur les 2 serveurs. Le dessin au doigt reste disponible ; vérifie Internet, désactive un bloqueur si présent, puis réessaie.');
+    if (!window.isSecureContext) {
+      ui('La caméra nécessite une page HTTPS ouverte directement dans Safari.');
       return;
     }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { cameraStarting = false; ui('Caméra indisponible sur ce navigateur.'); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      ui('Caméra non accessible dans ce navigateur. Ouvre directement le lien dans Safari.');
+      return;
+    }
+    cameraStarting=true;
     try {
-      status('STARTING CAMERA');
-      video = document.querySelector('.input_video');
-      video.muted = true;
-      video.playsInline = true;
-      video.autoplay = true;
-      video.setAttribute('playsinline', '');
-      video.setAttribute('webkit-playsinline', '');
-      video.setAttribute('muted', '');
-      video.setAttribute('autoplay', '');
+      status('DEMANDE CAMÉRA');
+      ui('Autorise la caméra quand Safari te le demande…');
+      video=document.querySelector('.input_video');
+      if (!video) throw new Error('Élément vidéo introuvable.');
+      video.muted=true;
+      video.playsInline=true;
+      video.autoplay=true;
+      for (const attr of ['playsinline','webkit-playsinline','muted','autoplay']) video.setAttribute(attr,'');
+      // Demander l'autorisation directement au clic, AVANT les chargements externes.
+      try {
+        cameraStream=await navigator.mediaDevices.getUserMedia({
+          audio:false,
+          video:{
+            facingMode:'user',
+            width:{ideal:isIOS?480:640},
+            height:{ideal:480},
+            frameRate:{ideal:isIOS?20:25,max:30}
+          }
+        });
+      } catch(e) {
+        if (['OverconstrainedError','NotFoundError','ConstraintNotSatisfiedError'].includes(e.name))
+          cameraStream=await navigator.mediaDevices.getUserMedia({audio:false,video:true});
+        else throw e;
+      }
+      video.srcObject=cameraStream;
+      try { await video.play(); }
+      catch(e) { if (e.name!=='AbortError') throw e; }
+      cameraEnabled=true;tracking=false;cameraErrors=0;resetMotion();
+      document.body.classList.add('camera-active');
+      if ($('camera-preview')) $('camera-preview').classList.toggle('mirror',mirrorCamera);
+      $('camera-btn').textContent='Arrêter la caméra';
+      if ($('camera-quick')) $('camera-quick').textContent='Stop caméra';
+      if ($('mode-status')) $('mode-status').textContent='MODE: CHARGEMENT GESTES';
+      describeGesture('Vidéo active · chargement du suivi de mains');
+      status('CHARGEMENT DES GESTES');
+      if (!(await ensureHandsLibrary())) {
+        stopCamera();
+        setStatusHands('LIBRARY ERROR');
+        ui('Le flux vidéo était accessible, mais MediaPipe est inaccessible. Vérifie ta connexion et désactive les bloqueurs de scripts, puis réessaie.');
+        return;
+      }
       if (!hands) {
-        hands = new Hands({ locateFile: (file) => handAssetsBase + file });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: .55, minTrackingConfidence: .55 });
+        hands=new Hands({locateFile:file=>handAssetsBase+file});
+        hands.setOptions({
+          maxNumHands:1,modelComplexity:0,
+          minDetectionConfidence:.55,minTrackingConfidence:.55
+        });
         hands.onResults(onHandResults);
       }
-      try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: 'user', width: {ideal:isIOS?480:640},height:{ideal:480},
-            frameRate:{ideal:isIOS?20:25,max:30} }
-        });
-      } catch (e) {
-        if (['OverconstrainedError','NotFoundError','ConstraintNotSatisfiedError'].includes(e.name)) {
-          cameraStream = await navigator.mediaDevices.getUserMedia({ audio:false,video:true });
-        } else throw e;
-      }
-      video.srcObject = cameraStream;
-      try { await video.play(); }
-      catch (e) {
-        if (e.name !== 'AbortError') throw e;
-      }
-      cameraEnabled = true; tracking = false; cameraErrors=0; resetMotion();
-      document.body.classList.add('camera-active');
-      if ($('camera-preview')) $('camera-preview').classList.toggle('mirror', mirrorCamera);
-      $('camera-btn').textContent = 'Arrêter la caméra';
-      if ($('camera-quick')) $('camera-quick').textContent='Stop caméra';
+      if (!cameraEnabled) return;
+      setStatusHands('SEARCHING');
       if ($('mode-status')) $('mode-status').textContent='MODE: RECHERCHE MAIN';
       describeGesture('Caméra active · montre ta main');
       status('CAMERA READY');
-      ui('Rapproche le pouce et l’index pour peindre. Écarte-les pour arrêter le tracé.');
+      ui('Caméra prête. Montre ta main, puis pince pouce-index pour dessiner.');
       trackCamera();
-    } catch (e) {
+    } catch(e) {
       stopCamera();
-      let detail = e.message || e.name || 'Erreur inconnue';
+      let detail=e.message||e.name||'Erreur inconnue';
       if (e.name==='NotAllowedError'||e.name==='PermissionDeniedError')
-        detail='autorisation refusée : autorise la caméra dans les réglages du site Safari';
-      else if (e.name==='NotReadableError')
-        detail='caméra occupée par une autre application : ferme la caméra ou FaceTime';
-      else if (e.name==='NotFoundError') detail='aucune caméra disponible';
-      ui('Accès caméra impossible : '+detail);
-    } finally { cameraStarting = false; }
+        detail='accès refusé : dans Safari, autorise la caméra pour ce site';
+      else if(e.name==='NotReadableError')
+        detail='caméra occupée (FaceTime, appel vidéo ou autre application)';
+      else if(e.name==='NotFoundError') detail='caméra introuvable';
+      ui('Caméra indisponible : '+detail);
+    } finally {
+      cameraStarting=false;
+    }
   }
   function installPointer() {
     const layer = $('interaction-layer');
