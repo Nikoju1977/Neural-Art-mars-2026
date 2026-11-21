@@ -65,8 +65,12 @@
   }
   function normalizedPoint(x, y) {
     const height = 2 * camera.position.z * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    return new THREE.Vector3((clamp(x, 0, 1) - .5) * height * camera.aspect,
+    const world = new THREE.Vector3((clamp(x, 0, 1) - .5) * height * camera.aspect,
       (.5 - clamp(y, 0, 1)) * height, 0);
+    // Convert screen-space input to sculpture-local coordinates even when the
+    // user has rotated the artwork; subsequent strokes still follow the finger.
+    painting.updateMatrixWorld(true);
+    return painting.worldToLocal(world);
   }
   function startStroke(x, y) {
     if (!painting || strokes.length >= maxStrokes) {
@@ -214,6 +218,9 @@
             domOverlay: { root: document.body }
           });
           button.textContent = 'MODE AR';
+          button.style.position = 'static';
+          button.style.display = 'block';
+          button.style.margin = '8px 0';
           $('ar-container').appendChild(button);
         }
       } catch (e) { console.warn('AR non disponible', e); }
