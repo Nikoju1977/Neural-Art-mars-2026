@@ -183,6 +183,15 @@
     $('bin-format').addEventListener('change',()=>{
       $('bin-stride').value=3*formats[$('bin-format').value].bytes;
     });
+    const openPicker=()=>{
+      const checkbox=$('tools-open'); if (checkbox) checkbox.checked=true;
+      const details=$('bin-reader'); if(details) details.open=true;
+      file.click();
+    };
+    for (const id of ['bin-open-quick','bin-open-mobile']) {
+      const button=$(id);
+      if(button) button.addEventListener('click',openPicker);
+    }
     $('bin-export').addEventListener('click',exportNative);
     $('bin-load-scene').addEventListener('click',importNative);
     $('bin-points').addEventListener('click',showPoints);
