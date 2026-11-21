@@ -1,4 +1,4 @@
-/* Neural Art Multi-format Reader v20.4 — traitement local, sans upload */
+/* Neural Art Multi-format Reader v20.5 — traitement local, sans upload */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -6,7 +6,19 @@
   const MAX_NATIVE_JSON = 8 * 1024 * 1024;
   const PREVIEW_BYTES = 512;
   const MAX_POINTS = 15000;
-  let activeBuffer = null, activeName = '', activeNative = null, activeGLTF = false, selectionSequence = 0;
+  let activeBuffer = null, activeName = '', activeNative = null, activeGLTF = false,
+    selectionSequence = 0, activeResources = {};
+  const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||
+    (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  async function readBytes(file) {
+    if (typeof file.arrayBuffer === 'function') return file.arrayBuffer();
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=()=>reject(reader.error||new Error('Lecture FileReader impossible'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
   const enc = new TextEncoder(), dec = new TextDecoder('utf-8',{fatal:false});
   const formats = {
     f32le:{bytes:4,read:(v,p)=>v.getFloat32(p,true)},
@@ -64,8 +76,14 @@
       throw new Error('Structure BIN Neural Art invalide.');
     return payload;
   }
-  async function loadFile(file) {
+  async function loadFile(file,selectedFiles=[]) {
     const seq=++selectionSequence;
+    activeResources={};
+    selectedFiles.filter(f=>f&&f!==file).forEach(f=>{
+      const name=f.name.toLowerCase();
+      activeResources[name]=f;
+      activeResources[name.split('/').pop()]=f;
+    });
     activeBuffer=null;activeNative=null;activeGLTF=false;activeName='';
     $('bin-load-scene').disabled=true;
     $('bin-points').disabled=true;
@@ -84,7 +102,7 @@
       return;
     }
     try {
-      const buffer=await file.arrayBuffer();
+      const buffer=await readBytes(file);
       if (seq!==selectionSequence) return;
       activeBuffer=buffer;activeName=file.name;
       const bytes=new Uint8Array(buffer);
@@ -101,6 +119,8 @@
       const ratio=Math.round(printable/Math.min(bytes.length,4096)*100);
       const lines=[
         'Fichier : '+file.name,
+        'Appareil : '+(isIOS?'iPhone/iPad (Safari)':'Android / PC'),
+        selectedFiles.length>1?'Fichiers annexes : '+(selectedFiles.length-1):'Fichiers annexes : aucun',
         'Taille : '+humanBytes(file.size)+' ('+file.size+' octets)',
         'Format détecté : '+kind,
         'Octets texte ASCII imprimables : '+ratio+' % (échantillon)',
@@ -138,7 +158,7 @@
       if (!window.NeuralArtBIN || !window.NeuralArtBIN.importGLTF)
         throw new Error('Moteur 3D indisponible. Actualise la page.');
       message('Import du modèle 3D en cours…');
-      const info=await window.NeuralArtBIN.importGLTF(activeBuffer,activeName);
+      const info=await window.NeuralArtBIN.importGLTF(activeBuffer,activeName,activeResources);
       if (seq!==selectionSequence) return;
       message('Modèle 3D affiché : '+info.name+' · dimensions '+info.dimensions.join(' × ')+'.');
       if ($('mode-status')) $('mode-status').textContent='MODE: MODELE 3D';
@@ -218,15 +238,31 @@
     if (!file) return;
     window.NeuralArtReaderReady=true;
     message('Lecteur prêt : ouvre un GLTF, GLB ou BIN. Les modèles GLTF compatibles s’affichent automatiquement.');
-    file.addEventListener('click',()=>{file.value='';});
-    file.addEventListener('change',()=>{const details=$('bin-reader'); if(details) details.open=true;loadFile(file.files&&file.files[0]);});
+    if (isIOS) {
+      // Le filtre par extension peut masquer .gltf/.bin dans le sélecteur Fichiers iOS.
+      file.removeAttribute('accept');
+      message('iPhone prêt : ouvre le dossier Fichiers, sélectionne GLTF/GLB/BIN. Tu peux sélectionner les fichiers annexes ensemble.');
+    }
+    file.addEventListener('change',()=>{
+      const files=Array.from(file.files||[]);
+      const primary=files.find(f=>/\.(gltf|glb)$/i.test(f.name))||
+        files.find(f=>/\.bin$/i.test(f.name))||files[0];
+      const details=$('bin-reader'); if(details) details.open=true;
+      if (!primary) return;
+      message('Fichier sélectionné : '+primary.name+'. Lecture…');
+      file.value=''; // Permet de sélectionner deux fois le même fichier sur Safari.
+      loadFile(primary,files);
+    });
     $('bin-format').addEventListener('change',()=>{
       $('bin-stride').value=3*formats[$('bin-format').value].bytes;
     });
     const openPicker=()=>{
       const checkbox=$('tools-open'); if (checkbox) checkbox.checked=true;
       const details=$('bin-reader'); if(details) details.open=true;
-      file.click();
+      if (isIOS) {
+        message('Sur iPhone : touche « Choisir un fichier » ci-dessous puis « Parcourir » dans l’app Fichiers.');
+        requestAnimationFrame(()=>file.scrollIntoView({block:'center',behavior:'smooth'}));
+      } else file.click();
     };
     for (const id of ['bin-open-quick','bin-open-mobile']) {
       const button=$(id);
