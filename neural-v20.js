@@ -63,31 +63,34 @@
     }
     return false;
   }
-  function drawPreviewLandmarks(points) {
-    const canvas = $('preview-landmarks');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-    if (!points) return;
-    const chains = [[0,1,2,3,4],[0,5,6,7,8],[5,9,10,11,12],
+  function drawPreviewLandmarks(allHands) {
+    const canvas=$('preview-landmarks');if(!canvas)return;
+    const ctx=canvas.getContext('2d');if(!ctx)return;
+    const w=canvas.width,h=canvas.height;
+    ctx.clearRect(0,0,w,h);
+    const hands=Array.isArray(allHands?.[0])?allHands:(allHands?[allHands]:[]);
+    const chains=[[0,1,2,3,4],[0,5,6,7,8],[5,9,10,11,12],
       [9,13,14,15,16],[13,17,18,19,20],[0,17]];
-    ctx.strokeStyle = '#00efff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    for (const chain of chains) {
-      ctx.beginPath();
-      chain.forEach((index,i) => {
-        const point = points[index]; if (!point) return;
-        if (i === 0) ctx.moveTo(point.x*w, point.y*h);
-        else ctx.lineTo(point.x*w, point.y*h);
-      });
-      ctx.stroke();
-    }
-    for (let i=0; i<points.length; i++) {
-      const p = points[i];
-      ctx.beginPath(); ctx.arc(p.x*w, p.y*h, (i===4 || i===8) ? 6 : 3.2, 0, Math.PI*2);
-      ctx.fillStyle = i===4 || i===8 ? '#ff4ccf' : '#f7ffff'; ctx.fill();
-    }
+    hands.slice(0,2).forEach((points,handIndex)=>{
+      if(!Array.isArray(points))return;
+      ctx.strokeStyle=handIndex?'#ffd16d':'#00efff';
+      ctx.lineWidth=3;ctx.lineCap='round';
+      for(const chain of chains){
+        ctx.beginPath();
+        chain.forEach((i,j)=>{
+          const p=points[i];if(!p)return;
+          if(j===0)ctx.moveTo(p.x*w,p.y*h);
+          else ctx.lineTo(p.x*w,p.y*h);
+        });
+        ctx.stroke();
+      }
+      for(let i=0;i<points.length;i++){
+        const p=points[i];if(!p)continue;
+        ctx.beginPath();ctx.arc(p.x*w,p.y*h,(i===4||i===8)?6:3.2,0,2*Math.PI);
+        ctx.fillStyle=i===4||i===8?(handIndex?'#ffe69a':'#ff4ccf'):'#f7ffff';
+        ctx.fill();
+      }
+    });
   }
   function describeGesture(message) {
     const el = $('gesture-indicator');
@@ -529,7 +532,7 @@
   // Deux mains suivies indépendamment ; chaque pincement crée un tracé séparé.
   function onHandResults(result) {
     const found=result.multiHandLandmarks||[];
-    drawPreviewLandmarks(found[0]);
+    drawPreviewLandmarks(found);
     if(!cameraEnabled || renderer.xr.isPresenting || pointerDown) {
       for(let i=0;i<2;i++)useStroke('hand-'+i,'end');
       return;
