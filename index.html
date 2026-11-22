@@ -164,6 +164,29 @@
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
   <script defer src="./neural-v20.js?v=20.5.1"></script>
 
+<style id="studio-niko-ui-v7">
+
+/* STUDIO NIKO UI V7 — outils de peinture tactiles faciles à atteindre */
+:where(button.action,#tools-toggle,.color-chip,#palette-tabs button){touch-action:manipulation}
+:where(.color-chip,#palette-tabs button,#tools-toggle):focus-visible{outline:3px solid #fff;outline-offset:3px}
+#quick-palette .color-chip{min-width:34px;min-height:34px}
+@media(max-width:600px){
+  #hud{max-height:calc(100dvh - 120px - env(safe-area-inset-bottom));padding:12px}
+  .mobile-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:9px 0}
+  .mobile-actions :where(button,#tools-toggle){min-height:46px;font-size:13px;padding:10px 7px}
+  #quick-palette{gap:8px}
+  #quick-palette .color-chip{width:38px;height:38px;min-width:38px;min-height:38px;border-radius:10px}
+  #palette-tabs{gap:7px}
+  #palette-tabs button{min-height:42px;font-size:12px;padding:8px 11px}
+  #palette-swatches{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+  #palette-swatches .color-chip{min-height:40px}
+  #hud-controls{padding-bottom:calc(15px + env(safe-area-inset-bottom))}
+  :where(select,input[type="text"],input[type="password"],input[type="number"]){font-size:16px;min-height:44px}
+  .bin-actions{gap:8px}
+  .bin-actions button{min-height:46px}
+}
+
+</style>
 </head>
 <body>
   <div id="interaction-layer" aria-label="Zone de dessin avec le doigt ou la souris"></div>
