@@ -17,7 +17,7 @@
   <meta property="og:title" content="Neural Art V20.5 | Studio Niko">
   <meta property="og:description" content="Atelier de peinture holographique gestuelle en 3D — gratuit sans clé IA.">
   <meta property="og:type" content="website">
-  <title>NEURAL ART V21 — STUDIO NIKO | Performance 3D</title>
+  <title>NEURAL ART V22.1 — STUDIO NIKO | Studio de création 3D et cordes musicales</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <style>
@@ -163,7 +163,8 @@
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
   <script defer src="./neural-v20.js?v=21.0"></script>
-  <script defer src="./performance-v21.js?v=21.0"></script>
+  <script defer src="./performance-v21.js?v=22.1"></script>
+  <script defer src="./strings-v22.js?v=22.1"></script>
 
 <style id="studio-niko-ui-v7">
 
@@ -220,10 +221,52 @@
     body.stage-immersive #stage-dock #stage-status { font-size:10px; }
   }
 </style>
+<style id="studio-niko-creative-v22">
+  #hand-cursor-2{position:fixed;z-index:3;width:26px;height:26px;margin:-13px 0 0 -13px;
+    border-radius:50%;border:2px solid #ffce65;background:#ffce651a;
+    box-shadow:0 0 0 6px #ffce6530,0 0 18px #ffce65a0;pointer-events:none}
+  #hand-cursor-2[hidden]{display:none!important}
+  #hand-cursor-2.drawing{transform:scale(.68);background:#ffce6588}
+  #strings-layer{position:fixed;inset:0;z-index:1;pointer-events:auto;touch-action:none}
+  #strings-layer[hidden]{display:none!important}
+  #strings-canvas{width:100%;height:100%;display:block;touch-action:none}
+  .studio-presets,.strings-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:10px 0}
+  .studio-presets button,.strings-buttons button{min-height:43px}
+  [data-studio-tool][aria-pressed="true"],[data-string-tool][aria-pressed="true"]{background:#08718b!important;border-color:#60eaff!important;color:white!important}
+  body.eraser-active #interaction-layer{cursor:cell}
+  #studio-rail{position:fixed;z-index:8;right:max(12px,env(safe-area-inset-right));top:50%;transform:translateY(-50%);
+    display:flex;flex-direction:column;gap:7px;padding:8px;border-radius:16px;max-width:150px;
+    background:#061822e8;border:1px solid #357b90;backdrop-filter:blur(12px);box-shadow:0 8px 30px #0009}
+  #studio-rail button,#strings-rail button{cursor:pointer;touch-action:manipulation;color:#dffaff;
+    background:#103647;border:1px solid #438296;border-radius:10px;padding:10px;font:600 12px system-ui;min-height:44px}
+  #studio-rail button:focus-visible,#strings-rail button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+  #studio-rail [data-studio-clear]{border-color:#9d5264;color:#ffe0e7}
+  #strings-rail{display:none;position:fixed;z-index:9;right:12px;top:12px;
+    flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:min(525px,calc(100vw - 24px));padding:8px;
+    border-radius:14px;background:#061722ec;border:1px solid #3d8399;box-shadow:0 8px 32px #000b}
+  body.strings-active #strings-rail{display:flex}
+  #strings-rail span{font:12px system-ui;color:#d2f4ff;align-self:center;padding:0 6px}
+  #strings-status{flex-basis:100%;text-align:right;white-space:normal}
+  body.stage-immersive #studio-rail{display:none!important}
+  body.stage-immersive #strings-rail{top:calc(8px + env(safe-area-inset-top))}
+  @media(max-width:750px){
+    #studio-rail{top:auto;right:8px;left:8px;bottom:calc(70px + env(safe-area-inset-bottom));
+      transform:none;max-width:none;flex-direction:row;justify-content:space-around;gap:4px;padding:5px;overflow-x:auto}
+    #studio-rail button{flex:1 0 auto;min-width:57px;min-height:44px;padding:6px;font-size:11px}
+    #strings-rail{top:auto;bottom:calc(129px + env(safe-area-inset-bottom));left:8px;right:8px;
+      max-width:none;justify-content:space-around;gap:4px}
+    #strings-rail button{flex:1 1 auto;min-height:41px;padding:6px;font-size:11px}
+    #strings-rail span{font-size:10px}
+    #strings-status{flex-basis:100%;text-align:center}
+    body.stage-immersive #strings-rail{top:calc(8px + env(safe-area-inset-top));bottom:auto}
+    body.stage-immersive #strings-rail button{min-height:43px}
+  }
+</style>
 </head>
 <body>
   <div id="interaction-layer" aria-label="Zone de dessin avec le doigt ou la souris"></div>
   <div id="hand-cursor" hidden aria-hidden="true"></div>
+  <div id="hand-cursor-2" hidden aria-hidden="true"></div>
   <div id="camera-preview" class="mirror" aria-label="Aperçu de la caméra et de la détection des mains">
     <div class="preview-picture">
       <video class="input_video" playsinline webkit-playsinline autoplay muted aria-hidden="true"></video>
@@ -232,9 +275,12 @@
     <div class="preview-caption" id="preview-caption">Caméra active</div>
   </div>
   <div id="touch-cursor" aria-hidden="true"></div>
+  <div id="strings-layer" hidden aria-label="Zone interactive des cordes musicales">
+    <canvas id="strings-canvas" aria-label="Tendre et jouer des cordes à deux mains"></canvas>
+  </div>
   <main id="app">
     <header id="hud" aria-label="Commandes de Neural Art">
-      <div class="brand"><h1>NEURAL <span>ART</span></h1><span class="version">V21 / STUDIO NIKO</span></div>
+      <div class="brand"><h1>NEURAL <span>ART</span></h1><span class="version">V22.1 / STUDIO NIKO</span></div>
       <p class="subtitle">Sculptures lumineuses pour films, projections et DJ sets.</p>
       <button class="action primary" type="button" id="stage-entry" aria-expanded="false" style="width:100%;min-height:45px;margin-bottom:8px">Plein écran · Performance visuelle</button>
       <input type="checkbox" id="tools-open" aria-label="Afficher ou masquer tous les outils et pinceaux">
@@ -252,13 +298,46 @@
       </div>
       <div id="quick-palette" role="group" aria-label="Couleurs rapides"></div>
       <div id="hud-controls">
+      <details class="settings" id="strings-settings">
+        <summary>Instrument à cordes · jouer avec deux mains</summary>
+        <p class="hint">Tends une corde du premier point au second. Sa longueur définit sa hauteur. Utilise l’autre main pour la pincer ; tu peux jouer plusieurs cordes avec plusieurs doigts.</p>
+        <div class="quick">
+          <button class="action primary" type="button" data-strings-toggle aria-pressed="false">Activer l’instrument</button>
+          <button class="action" type="button" id="strings-demo">Créer une harpe à 6 cordes</button>
+        </div>
+        <div class="strings-buttons" role="group" aria-label="Modes des cordes">
+          <button class="action" type="button" data-string-tool="create" aria-pressed="true">Tendre</button>
+          <button class="action" type="button" data-string-tool="play">Jouer</button>
+          <button class="action" type="button" data-string-tool="edit">Accorder</button>
+          <button class="action" type="button" data-string-tool="erase">Effacer</button>
+        </div>
+        <div class="form-grid">
+          <label>Tension
+            <input id="strings-tension" type="range" min=".4" max="2.5" value="1" step=".05"></label>
+          <label>Volume · <output id="strings-volume-value">55 %</output>
+            <input id="strings-volume" type="range" min="0" max="100" value="55" step="1"></label>
+          <label class="full">Timbre
+            <select id="strings-timbre">
+              <option value="classic">Corde pincée</option>
+              <option value="soft">Corde douce</option>
+              <option value="metal">Corde métallique</option>
+            </select></label>
+        </div>
+        <button class="action danger" id="strings-clear" type="button">Supprimer toutes les cordes</button>
+        <p class="hint">Synthèse locale Web Audio · jusqu’à 18 cordes. Aucune transmission de fichier ou de microphone.</p>
+      </details>
       <details class="settings" id="stage-settings">
         <summary>Scénographie, compositions et musique</summary>
         <p class="hint">Crée une œuvre 3D puis anime-la avec ta musique locale. Pour une projection, un clip expérimental ou un live DJ. L'audio n'est pas envoyé à un serveur.</p>
-        <div class="row-buttons" role="group" aria-label="Compositions génératives">
+        <div class="studio-presets" role="group" aria-label="Compositions procédurales">
           <button class="action" type="button" data-stage-preset="vortex">Vortex</button>
           <button class="action" type="button" data-stage-preset="fleur">Fleur 3D</button>
           <button class="action" type="button" data-stage-preset="orbites">Orbites</button>
+          <button class="action" type="button" data-stage-preset="spirale">Spirale</button>
+          <button class="action" type="button" data-stage-preset="galaxie">Galaxie</button>
+          <button class="action" type="button" data-stage-preset="onde">Ondes</button>
+          <button class="action" type="button" data-stage-preset="coeur">Cœur</button>
+          <button class="action" type="button" data-stage-preset="rosace">Rosace</button>
         </div>
         <p class="hint">Musique sélectionnée : <strong id="stage-track-label">Aucune</strong></p>
         <div class="row-buttons">
@@ -291,6 +370,8 @@
         <div class="hint">Couleur active : <span id="brush-color-text">#00f2ff</span> <span id="brush-color-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#00f2ff"></span></div>
       </details>
       <div class="quick">
+        <button class="action" type="button" data-studio-tool="draw" aria-pressed="true">Pinceau tactile</button>
+        <button class="action" type="button" data-studio-tool="erase" aria-pressed="false">Gomme · tracé entier</button>
         <button class="action" style="grid-column:1/-1" type="button" id="bin-open-quick">Importer un fichier 3D (GLTF / GLB / BIN)</button>
         <button class="action primary" id="camera-btn" type="button">Activer la caméra</button>
         <button class="action" id="voice-btn" type="button">Activer la voix</button>
@@ -299,7 +380,7 @@
         <button class="action" id="export-png-btn" type="button">Image PNG</button>
         <a id="download-link" href="#" download>Enregistrer le dernier export</a>
         <button class="action" id="export-btn" type="button">Exporter 3D</button>
-        <button class="action danger" id="clear-paint-btn" type="button">Effacer</button>
+        <button class="action danger" id="clear-paint-btn" type="button">Tout effacer</button>
       </div>
       <details class="settings">
         <summary>Détection et mouvements</summary>
@@ -378,13 +459,34 @@
       </details>
       </div>
     </header>
+    <nav id="studio-rail" aria-label="Outils de création toujours accessibles">
+      <button type="button" data-studio-tool="draw" aria-pressed="true">Pinceau</button>
+      <button type="button" data-studio-tool="erase" aria-pressed="false">Gomme</button>
+      <button type="button" id="studio-strings" data-strings-toggle aria-pressed="false">Cordes</button>
+      <button type="button" data-studio-undo>Annuler</button>
+      <button type="button" data-studio-clear>Tout effacer</button>
+    </nav>
+    <nav id="strings-rail" aria-label="Outils des cordes musicales">
+      <button type="button" data-string-tool="create" aria-pressed="true">Tendre</button>
+      <button type="button" data-string-tool="play">Jouer</button>
+      <button type="button" data-string-tool="edit">Accorder</button>
+      <button type="button" data-string-tool="erase">Gomme</button>
+      <button type="button" data-strings-toggle>Quitter cordes</button>
+      <span id="strings-count">0 / 18 cordes</span>
+      <span id="strings-note">— Hz</span>
+      <span id="strings-status" role="status" aria-live="polite">Prêt à tendre une corde</span>
+    </nav>
     <nav id="stage-dock" aria-label="Commandes de performance plein écran">
       <button type="button" class="action" id="stage-exit">Quitter plein écran</button>
       <button type="button" class="action" id="stage-dock-file">Charger son</button>
       <button type="button" class="action" id="stage-play">Lire musique</button>
       <button type="button" class="action" data-stage-preset="vortex">Vortex</button>
       <button type="button" class="action" data-stage-preset="fleur">Fleur</button>
+      <button type="button" class="action" data-studio-tool="draw" aria-pressed="true">Pinceau</button>
+      <button type="button" class="action" data-studio-tool="erase" aria-pressed="false">Gomme</button>
+      <button type="button" class="action" data-strings-toggle aria-pressed="false">Cordes</button>
       <button type="button" class="action" id="stage-undo">Annuler</button>
+      <button type="button" class="action danger" id="stage-clear">Tout effacer</button>
       <button type="button" class="action" id="stage-snapshot">Photo PNG</button>
       <button type="button" class="action" id="stage-record">Enregistrer vidéo</button>
       <a id="stage-video-download" href="#" download hidden>Télécharger le clip</a>
