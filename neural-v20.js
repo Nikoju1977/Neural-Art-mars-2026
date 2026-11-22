@@ -1013,11 +1013,12 @@
   // Pont public pour la performance : le reste du moteur garde son encapsulation.
   function makeStageArtwork(kind) {
     if (!painting || !renderer) throw new Error('Le moteur 3D n’est pas disponible.');
-    if (!['vortex','fleur','orbites'].includes(kind)) throw new Error('Composition inconnue.');
+    if (!['vortex','fleur','orbites','spirale','galaxie','onde','coeur','rosace'].includes(kind))
+      throw new Error('Composition inconnue.');
     endStroke();
     const oldColor = brushColor, oldMode = brushMode, oldSize = brushSize;
     const colors = ['#00f2ff','#f95bca','#ffe066','#57ffbc','#aa87ff','#ff8d47'];
-    const layers = kind === 'orbites' ? 7 : kind === 'fleur' ? 6 : 4;
+    const layers = ({orbites:7,fleur:6,vortex:4,spirale:4,galaxie:5,onde:5,coeur:4,rosace:6})[kind];
     const toCreate = Math.min(layers, Math.max(0, maxStrokes-strokes.length));
     if (!toCreate) throw new Error('Limite de tracés atteinte. Annule ou efface des traits.');
     let created = 0;
@@ -1025,18 +1026,29 @@
       brushMode='neon'; brushSize=.38;
       for (let k=0;k<toCreate;k++) {
         updateColor(colors[k%colors.length]);
-        const count=kind==='fleur'?100:kind==='vortex'?112:94;
+        const count=kind==='fleur'||kind==='coeur'?100:kind==='vortex'||kind==='galaxie'?112:94;
         let createdStroke=null;
         for(let i=0;i<count;i++) {
           const t=i/(count-1), a=t*Math.PI*2;
           let x,y;
-          if(kind==='vortex') {
-            const angle=t*Math.PI*(5.5+k*.25)+k*.65, rad=.045+.34*t;
+          if(kind==='vortex'||kind==='spirale'||kind==='galaxie'){
+            const turns=kind==='spirale'?8:kind==='galaxie'?5:5.5;
+            const angle=t*Math.PI*(turns+k*.25)+k*(kind==='galaxie'?1.25:.65);
+            const rad=.025+.34*t;
             x=.5+Math.cos(angle)*rad; y=.5+Math.sin(angle)*rad*.77;
-          } else if (kind==='fleur') {
-            const rad=.19+.1*Math.cos(6*a+k*.62);
+          } else if(kind==='fleur'||kind==='rosace'){
+            const lobes=kind==='rosace'?9:6;
+            const rad=.19+.1*Math.cos(lobes*a+k*.62);
             x=.5+Math.cos(a)*rad;
             y=.5+Math.sin(a)*rad*.82;
+          } else if(kind==='onde'){
+            x=.12+.76*t;
+            y=.5+(k-2)*.055+Math.sin(t*Math.PI*(4+k*.5))*.075;
+          } else if(kind==='coeur'){
+            const hx=Math.pow(Math.sin(a),3);
+            const hy=(13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a))/17;
+            x=.5+hx*(.16+k*.015);
+            y=.48-hy*(.18+k*.01);
           } else {
             const rad=.09+k*.035;
             x=.5+Math.cos(a)*rad;
@@ -1049,8 +1061,9 @@
         if(createdStroke) {
           createdStroke.points.forEach((p,i) => {
             const t=i/Math.max(1,createdStroke.points.length-1);
-            p.z = kind==='vortex' ? -3+k*2+t*5 :
-              kind==='fleur' ? (k-2.5)*1.4+Math.sin(t*Math.PI*6)*1.3 : (k-3)*2;
+            p.z = ['vortex','spirale','galaxie'].includes(kind) ? -3+k*1.5+t*4.5 :
+              ['fleur','rosace','coeur'].includes(kind) ?
+              (k-layers/2)*1.3+Math.sin(t*Math.PI*6)*1.1 : (k-2)*2;
           });
           refreshStroke(createdStroke);
           created++;
@@ -1116,6 +1129,8 @@
       button.addEventListener('click',()=>{if(window.confirm('Effacer toute la création 3D ?'))clear();});
     }
     $('undo-btn').addEventListener('click', undo);
+    for(const button of document.querySelectorAll('[data-studio-undo]'))
+      button.addEventListener('click', undo);
     $('export-btn').addEventListener('click', exportGLTF);
     $('export-png-btn').addEventListener('click', exportPNG);
     $('brush-color').addEventListener('input', (e) => updateColor(e.target.value));
