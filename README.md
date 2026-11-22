@@ -1,6 +1,25 @@
-# Neural Art V21 — Studio Niko
+# Neural Art V22.1 — Studio Niko
 
 Atelier de création **tactile et gestuelle 3D**, dédié aussi à la **scénographie live, aux visuels de DJ sets, aux projections et aux films expérimentaux**. Application web gratuite pour le dessin, les motifs procéduraux et l’animation audio locale, sans compte.
+
+## Nouveautés V22.1 — Deux mains et cordes musicales
+
+**Peinture simultanée à deux doigts ou deux mains** : la zone tactile utilise plusieurs pointeurs indépendants. La caméra MediaPipe est configurée pour suivre deux mains ; chaque pincement pouce-index peut peindre de son côté, avec deux curseurs de couleurs distinctes. Les résultats de suivi dépendent de l’appareil et des conditions d’éclairage.
+
+**Gomme tactile** : sélectionner « Gomme », puis toucher un trait de sculpture pour supprimer **le trait entier**. « Annuler » le restaure tant qu’aucune autre action d’historique ne l’a remplacé. « Tout effacer » demande confirmation et supprime l’œuvre 3D. La suppression partielle d’une portion de trait n’est pas encore implémentée.
+
+**Instrument à cordes** : sélectionner « Cordes » dans la barre d’outils, puis :
+
+1. En mode **Tendre**, faire glisser un doigt entre les deux extrémités d’une nouvelle corde.
+2. En mode **Jouer**, passer un doigt (ou plusieurs) à travers les cordes pour les pincer. Une main peut maintenir un point d’ancrage tandis que l’autre joue.
+3. En mode **Accorder**, déplacer une extrémité pour allonger ou raccourcir la corde. Ajuster également la tension, le timbre et le volume.
+4. En mode **Gomme**, toucher une corde pour la retirer ; une confirmation permet d’effacer tout l’instrument.
+
+La hauteur est calculée à partir de la longueur relative de la corde et de sa tension selon un modèle de corde idéale (la fréquence diminue quand la longueur augmente). Le son synthétique est produit dans le navigateur par un algorithme Karplus–Strong. Jusqu’à 18 cordes. Pas d’enregistrement audio dédié à ce module pour l’instant. Un mode de démonstration construit une harpe à six cordes.
+
+**Autres outils de création** : la barre Pinceau / Gomme / Cordes / Annuler / Tout effacer reste accessible sur mobile et ordinateur. Les compositions procédurales incluent désormais Vortex, Fleur 3D, Orbites, Spirale, Galaxie, Ondes, Cœur et Rosace.
+
+**Limites connues** : un navigateur doit autoriser le démarrage de l’audio à la suite d’un geste utilisateur ; cliquer « Cordes » peut servir à l’activer. Sur Safari iOS, les API de capture vidéo et de plein écran natif restent variables. Le suivi simultané à deux mains, les gestes et le son doivent être validés sur appareils réels.
 
 ## Pourquoi utiliser Neural Art ?
 
@@ -45,7 +64,7 @@ La fonction « compositions procédurales » est algorithmique : ce n’est pas 
 
 ## Technique et limites
 
-- Code statique : `index.html`, `neural-v20.js`, `performance-v21.js`, `sw.js`, `manifest.json`, `icon.svg`.
+- Code statique : `index.html`, `neural-v20.js`, `performance-v21.js`, `strings-v22.js`, `sw.js`, `manifest.json`, `icon.svg`.
 - Bibliothèques externes : Three.js r128 et MediaPipe Hands. **Internet est nécessaire pour leur premier chargement.**
 - La reconnaissance des mains dépend de l'éclairage, de la visibilité des doigts, du CPU/GPU et des autorisations caméra.
 - La caméra est traitée dans le navigateur, sans envoi intentionnel du flux vidéo au backend de ce projet. Les dépendances externes sont récupérées via CDN.
