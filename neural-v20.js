@@ -360,6 +360,7 @@
     if(!['draw','erase'].includes(value))return;
     finishAllStrokes();
     touchTool=value;
+    if(window.NeuralArtStrings?.active())window.NeuralArtStrings.show(false);
     document.body.classList.toggle('eraser-active',value==='erase');
     for(const button of document.querySelectorAll('[data-studio-tool]')){
       const selected=button.dataset.studioTool===value;
