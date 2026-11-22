@@ -14,6 +14,9 @@
   let drawing = null, cameraStream = null, cameraEnabled = false, processing = false;
   let brushMode = 'neon', brushColor = palette.cyan, brushSize = 0.7;
   let pointerDown = false, tracking = false, recognition = null, voiceEnabled = false;
+  let touchTool='draw';
+  const multiStroke=new Map(), history=[];
+  const handMotion=[0,1].map(()=>({x:.5,y:.5,initialized:false,lastTs:0,pinched:false,pinchFrames:0,releaseFrames:0,missed:0,palmX:null,palmY:null}));
   let mistralKey = '', strokes = [], rafCamera = 0;
   const maxStrokes = 160, maxPointsPerStroke = 140;
   const motion = { x: 0.5, y: 0.5, lastX: 0.5, lastY: 0.5, lastTs: 0,
@@ -183,11 +186,16 @@
     motion.pinchFrames = 0; motion.releaseFrames = 0;
     motion.missedFrames = 0; motion.lastTs = 0;
     motion.palmX = null; motion.palmY = null;
-    const cursor = $('hand-cursor');
-    if (cursor) cursor.hidden = true;
+    for(const index of [0,1]){
+      const state=handMotion[index];
+      Object.assign(state,{x:.5,y:.5,initialized:false,lastTs:0,pinched:false,pinchFrames:0,releaseFrames:0,missed:0,palmX:null,palmY:null});
+      useStroke('hand-'+index,'end');
+      const cursor=$(index ? 'hand-cursor-2' : 'hand-cursor');
+      if(cursor)cursor.hidden=true;
+    }
   }
-  function showHandCursor(x, y, drawing) {
-    const cursor = $('hand-cursor');
+  function showHandCursor(x, y, drawing, index=0) {
+    const cursor = $(index ? 'hand-cursor-2' : 'hand-cursor');
     if (!cursor) return;
     cursor.hidden = false;
     cursor.style.left = (x * 100) + '%';
@@ -246,6 +254,7 @@
     painting.add(mesh);
     drawing = { mesh, points: [point], mode: brushMode, size: brushSize, lastRender: 0 };
     strokes.push(drawing);
+    history.push({type:'draw',stroke:drawing});
     updateCount();
   }
   function refreshStroke(stroke) {
@@ -279,18 +288,96 @@
     refreshStroke(drawing);
     drawing = null;
   }
-  function undo() {
+  function useStroke(key,action,x,y) {
+    const saved=drawing;
+    drawing=multiStroke.get(key)||null;
+    if(action==='end')endStroke();
+    else if(!drawing)startStroke(x,y);
+    else moveStroke(x,y);
+    if(drawing)multiStroke.set(key,drawing);
+    else multiStroke.delete(key);
+    drawing=saved;
+  }
+  function finishAllStrokes(){
+    for(const key of [...multiStroke.keys()])useStroke(key,'end');
     endStroke();
-    const stroke = strokes.pop();
-    if (stroke) { painting.remove(stroke.mesh); safeDispose(stroke.mesh); }
+  }
+  function undo() {
+    finishAllStrokes();
+    const action=history.pop();
+    if(action?.type==='draw') {
+      const index=strokes.indexOf(action.stroke);
+      if(index>=0){strokes.splice(index,1);painting.remove(action.stroke.mesh);safeDispose(action.stroke.mesh);}
+    }else if(action?.type==='erase'){
+      if(!strokes.includes(action.stroke)){
+        strokes.splice(Math.min(action.index,strokes.length),0,action.stroke);
+        painting.add(action.stroke.mesh);
+      }
+    }else if(strokes.length){
+      const stroke=strokes.pop();painting.remove(stroke.mesh);safeDispose(stroke.mesh);
+    }
     updateCount();
-    ui(stroke ? 'Dernier tracé annulé.' : 'Aucun tracé à annuler.');
+    ui(action?'Action annulée.':'Aucune action à annuler.');
+  }
+  function pointToSegment(x,y,a,b) {
+    const dx=b.x-a.x,dy=b.y-a.y;
+    const t=clamp(((x-a.x)*dx+(y-a.y)*dy)/Math.max(1e-9,dx*dx+dy*dy),0,1);
+    return Math.hypot(x-(a.x+t*dx),y-(a.y+t*dy));
+  }
+  function eraseNearestStroke(x,y){
+    if(!renderer||!camera||!painting||!strokes.length)return false;
+    painting.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    const tmp=new THREE.Vector3(),a={x:0,y:0},b={x:0,y:0};
+    let closest=null,best=Math.max(18,brushSize*10),index=-1;
+    const width=Math.max(1,innerWidth),height=Math.max(1,innerHeight);
+    for(let k=0;k<strokes.length;k++){
+      const stroke=strokes[k];let previous=null;
+      const step=Math.max(1,Math.floor(stroke.points.length/80));
+      for(let i=0;i<stroke.points.length;i+=step){
+        tmp.copy(stroke.points[i]).applyMatrix4(painting.matrixWorld).project(camera);
+        b.x=(tmp.x+1)*.5;b.y=(1-tmp.y)*.5;
+        const dist=previous?pointToSegment(x,y,previous,b):Math.hypot(x-b.x,y-b.y);
+        const pixelDistance=dist*Math.min(width,height);
+        if(pixelDistance<best){best=pixelDistance;closest=stroke;index=k;}
+        previous={x:b.x,y:b.y};
+      }
+    }
+    if(!closest)return false;
+    finishAllStrokes();
+    painting.remove(closest.mesh);
+    strokes.splice(index,1);
+    // Garde le maillage en mémoire jusqu’à Annuler ; il est libéré à l’effacement complet.
+    history.push({type:'erase',stroke:closest,index});
+    updateCount();
+    ui('Trait effacé. Appuie sur Annuler pour le restaurer.');
+    return true;
+  }
+  function setTouchTool(value){
+    if(!['draw','erase'].includes(value))return;
+    finishAllStrokes();
+    touchTool=value;
+    document.body.classList.toggle('eraser-active',value==='erase');
+    for(const button of document.querySelectorAll('[data-studio-tool]')){
+      const selected=button.dataset.studioTool===value;
+      button.setAttribute('aria-pressed',String(selected));
+    }
+    if($('mode-status'))$('mode-status').textContent=value==='erase'?'MODE: GOMME':'MODE: DESSIN';
+    ui(value==='erase'?'Gomme active : touche un trait pour le retirer. Annuler le restaure.':'Pinceau actif : dessine au doigt.');
   }
   function clear() {
     removeBinCloud();
     removeImportedModel();
-    endStroke();
-    for (const stroke of strokes) { painting.remove(stroke.mesh); safeDispose(stroke.mesh); }
+    finishAllStrokes();
+    const disposed=new Set();
+    for(const entry of history)if(entry.type==='erase' && !disposed.has(entry.stroke)){
+      safeDispose(entry.stroke.mesh);disposed.add(entry.stroke);
+    }
+    history.length=0;
+    for (const stroke of strokes) {
+      painting.remove(stroke.mesh);
+      if(!disposed.has(stroke)){safeDispose(stroke.mesh);disposed.add(stroke);}
+    }
     strokes = [];
     updateCount();
     ui('Atelier effacé.');
@@ -439,76 +526,74 @@
   }
   // Adaptive hysteresis + speed-dependent temporal smoothing. Distance relative
   // to palm width avoids a fixed pixel threshold across near/far hands.
+  // Deux mains suivies indépendamment ; chaque pincement crée un tracé séparé.
   function onHandResults(result) {
-    drawPreviewLandmarks(result.multiHandLandmarks && result.multiHandLandmarks[0]);
-    if (!cameraEnabled || renderer.xr.isPresenting || pointerDown) {
-      resetMotion(); return;
-    }
-    const found = result.multiHandLandmarks && result.multiHandLandmarks[0];
-    if (!found) {
-      motion.missedFrames += 1;
-      if (motion.missedFrames >= 3) {
-        endStroke(); resetMotion(); setStatusHands('SEARCHING');
-        if ($('mode-status')) $('mode-status').textContent='MODE: MAIN NON DETECTEE';
-        describeGesture('Montre ta main à la caméra');
-      }
+    const found=result.multiHandLandmarks||[];
+    drawPreviewLandmarks(found[0]);
+    if(!cameraEnabled || renderer.xr.isPresenting || pointerDown) {
+      for(let i=0;i<2;i++)useStroke('hand-'+i,'end');
       return;
     }
-    motion.missedFrames = 0;
-    const tip = found[8], thumb = found[4], indexRoot = found[5], pinkyRoot = found[17];
-    if (![tip, thumb, indexRoot, pinkyRoot].every(p =>
-      Number.isFinite(p.x) && Number.isFinite(p.y))) return;
-    const width = Math.max(.045, Math.hypot(indexRoot.x - pinkyRoot.x, indexRoot.y - pinkyRoot.y));
-    const pinchRatio = Math.hypot(tip.x - thumb.x, tip.y - thumb.y) / width;
-    const enterThreshold = .38 * trackingSensitivity;
-    const exitThreshold = .57 * trackingSensitivity;
-    if (!motion.pinched) {
-      motion.pinchFrames = pinchRatio < enterThreshold ? motion.pinchFrames + 1 : 0;
-      if (motion.pinchFrames >= 2) {
-        motion.pinched = true; motion.releaseFrames = 0;
-      }
-    } else {
-      motion.releaseFrames = pinchRatio > exitThreshold ? motion.releaseFrames + 1 : 0;
-      if (motion.releaseFrames >= 2) {
-        motion.pinched = false; motion.pinchFrames = 0; endStroke();
-      }
+    if(window.NeuralArtStrings?.active()) {
+      for(let i=0;i<2;i++)useStroke('hand-'+i,'end');
+      window.NeuralArtStrings.hands(found,mirrorCamera);
+      setStatusHands(found.length+' MAIN(S) · CORDES');
+      return;
     }
-    const rawX = clamp(mirrorCamera ? 1 - tip.x : tip.x, 0, 1);
-    const rawY = clamp(tip.y, 0, 1);
-    const now = performance.now();
-    const dt = clamp(now - (motion.lastTs || now - 33), 10, 100);
-    const dist = Math.hypot(rawX - motion.x, rawY - motion.y);
-    const speed = dist / (dt / 1000);
-    const alpha = motion.initialized ?
-      clamp(motionSmoothing * .52 + speed * .075, .14, .85) : 1;
-    motion.x += alpha * (rawX - motion.x);
-    motion.y += alpha * (rawY - motion.y);
-    motion.lastTs = now; motion.initialized = true;
-    showHandCursor(motion.x, motion.y, motion.pinched);
-    if (motion.pinched) {
-      motion.palmX = null; motion.palmY = null;
-      moveStroke(motion.x, motion.y);
-      setStatusHands('DRAWING');
-      if ($('mode-status')) $('mode-status').textContent='MODE: PINCEMENT';
-      describeGesture('Pincement détecté · DESSIN');
-    } else {
-      endStroke();
-      // Optional navigation: moving the open hand orbits the 3D sculpture.
-      if (gestureRotate) {
-        const palm = found[9];
-        const px = mirrorCamera ? 1 - palm.x : palm.x, py = palm.y;
-        if (motion.palmX !== null && motion.palmY !== null) {
-          const dx = clamp(px - motion.palmX, -.10, .10);
-          const dy = clamp(py - motion.palmY, -.10, .10);
-          painting.rotation.y += dx * 3;
-          painting.rotation.x += dy * 3;
+    const now=performance.now();
+    let detected=0,pinchedCount=0;
+    for(let i=0;i<2;i++){
+      const hand=found[i],state=handMotion[i],cursor=$(i?'hand-cursor-2':'hand-cursor');
+      if(!hand) {
+        state.missed++;
+        if(state.missed>=3) {
+          useStroke('hand-'+i,'end');state.pinched=false;state.initialized=false;
+          state.pinchFrames=0;state.releaseFrames=0;
+          if(cursor)cursor.hidden=true;
         }
-        motion.palmX = px; motion.palmY = py;
+        continue;
       }
-      setStatusHands(gestureRotate ? 'ROTATE / READY' : 'TRACKING');
-      if ($('mode-status')) $('mode-status').textContent=gestureRotate ? 'MODE: ROTATION 3D' : 'MODE: MAIN SUIVIE';
-      describeGesture(gestureRotate ? 'Main ouverte · rotation 3D' : 'Main suivie · pince pour dessiner');
+      const tip=hand[8],thumb=hand[4],base=hand[5],outer=hand[17];
+      if(![tip,thumb,base,outer].every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)))continue;
+      detected++;state.missed=0;
+      const palmWidth=Math.max(.045,Math.hypot(base.x-outer.x,base.y-outer.y));
+      const ratio=Math.hypot(tip.x-thumb.x,tip.y-thumb.y)/palmWidth;
+      if(!state.pinched){
+        state.pinchFrames=ratio < .38*trackingSensitivity ? state.pinchFrames+1 : 0;
+        if(state.pinchFrames>=2){state.pinched=true;state.releaseFrames=0;}
+      }else{
+        state.releaseFrames=ratio > .57*trackingSensitivity ? state.releaseFrames+1 : 0;
+        if(state.releaseFrames>=2){state.pinched=false;state.pinchFrames=0;useStroke('hand-'+i,'end');}
+      }
+      const rawX=clamp(mirrorCamera?1-tip.x:tip.x,0,1),rawY=clamp(tip.y,0,1);
+      const dt=clamp(now-(state.lastTs||now-33),10,100);
+      const speed=Math.hypot(rawX-state.x,rawY-state.y)/(dt/1000);
+      const alpha=state.initialized?clamp(motionSmoothing*.52+speed*.075,.14,.85):1;
+      state.x+=alpha*(rawX-state.x);state.y+=alpha*(rawY-state.y);
+      state.lastTs=now;state.initialized=true;
+      showHandCursor(state.x,state.y,state.pinched,i);
+      if(state.pinched){
+        pinchedCount++;
+        if(touchTool==='erase')eraseNearestStroke(state.x,state.y);
+        else useStroke('hand-'+i,'move',state.x,state.y);
+        state.palmX=null;state.palmY=null;
+      }else{
+        useStroke('hand-'+i,'end');
+        if(i===0&&gestureRotate&&!pointerDown&&touchTool==='draw'){
+          const palm=hand[9],px=mirrorCamera?1-palm.x:palm.x,py=palm.y;
+          if(state.palmX!==null&&state.palmY!==null){
+            painting.rotation.y+=clamp(px-state.palmX,-.1,.1)*3;
+            painting.rotation.x+=clamp(py-state.palmY,-.1,.1)*3;
+          }
+          state.palmX=px;state.palmY=py;
+        }
+      }
     }
+    setStatusHands(detected+' MAIN(S)'+(pinchedCount?' · '+pinchedCount+' PINCEMENT(S)':''));
+    if($('mode-status'))$('mode-status').textContent=pinchedCount?
+      (touchTool==='erase'?'MODE: GOMME':'MODE: DESSIN À '+pinchedCount+' MAIN(S)'):
+      (detected?'MODE: SUIVI DES MAINS':'MODE: RECHERCHE DES MAINS');
+    describeGesture(detected ? 'Mains suivies : '+detected+' · pinçages actifs : '+pinchedCount : 'Montre tes mains à la caméra');
   }
   async function trackCamera() {
     if (!cameraEnabled || processing || !hands || !video) return;
@@ -610,7 +695,7 @@
       if (!hands) {
         hands=new Hands({locateFile:file=>handAssetsBase+file});
         hands.setOptions({
-          maxNumHands:1,modelComplexity:0,
+          maxNumHands:2,modelComplexity:0,
           minDetectionConfidence:.55,minTrackingConfidence:.55
         });
         hands.onResults(onHandResults);
@@ -636,57 +721,59 @@
     }
   }
   function installPointer() {
-    const layer = $('interaction-layer');
-    if (!layer) return;
-    // Un seul pointeur actif : une seconde pression ne peut plus arrêter
-    // le tracé du premier doigt sur Safari iOS.
-    let activePointerId = null;
-    const coords = (e) => {
-      const rect = layer.getBoundingClientRect();
-      return [clamp((e.clientX - rect.left) / Math.max(rect.width, 1), 0, 1),
-        clamp((e.clientY - rect.top) / Math.max(rect.height, 1), 0, 1)];
+    const layer=$('interaction-layer');if(!layer)return;
+    const pointers=new Map(),cursor=$('touch-cursor');
+    const coords=e=>{
+      const rect=layer.getBoundingClientRect();
+      return [clamp((e.clientX-rect.left)/Math.max(rect.width,1),0,1),
+        clamp((e.clientY-rect.top)/Math.max(rect.height,1),0,1)];
     };
-    const cursor = $('touch-cursor');
-    const showCursor = (e) => {
-      if (!cursor) return;
-      cursor.style.display = 'block';
-      cursor.style.left = e.clientX + 'px';
-      cursor.style.top = e.clientY + 'px';
+    const touchCursor=e=>{
+      if(!cursor)return;
+      cursor.style.display='block';cursor.style.left=e.clientX+'px';cursor.style.top=e.clientY+'px';
     };
-    const finish = (e) => {
-      // pointercancel et lostpointercapture peuvent arriver dans un ordre variable.
-      if (e && typeof e.pointerId === 'number' && e.pointerId !== activePointerId) return;
-      activePointerId = null;
-      pointerDown = false;
-      endStroke();
-      if (cursor) cursor.style.display = 'none';
-      if ($('mode-status')) $('mode-status').textContent = cameraEnabled ? 'MODE: MAIN' : 'MODE: TACTILE';
+    const finish=e=>{
+      const id=e?.pointerId;
+      if(id===undefined){
+        for(const key of pointers.keys())useStroke('touch-'+key,'end');
+        pointers.clear();
+      }else if(pointers.has(id)){
+        useStroke('touch-'+id,'end');pointers.delete(id);
+      }
+      pointerDown=pointers.size>0;
+      if(!pointerDown&&cursor)cursor.style.display='none';
+      if(!pointerDown&&$('mode-status'))$('mode-status').textContent=touchTool==='erase'?'MODE: GOMME':'MODE: DESSIN';
     };
-    layer.addEventListener('pointerdown', (e) => {
-      if (activePointerId !== null || e.isPrimary === false || e.button !== 0) return;
+    layer.addEventListener('pointerdown',e=>{
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      if(pointers.has(e.pointerId))return;
       e.preventDefault();
-      activePointerId = e.pointerId;
-      pointerDown = true;
-      try { layer.setPointerCapture(e.pointerId); }
-      catch (_) { /* Safari peut refuser une capture ; pointercancel remet alors l'état à zéro. */ }
-      const [x,y] = coords(e);
-      endStroke();
-      startStroke(x,y);
-      showCursor(e);
-      if ($('mode-status')) $('mode-status').textContent = 'MODE: DESSIN TACTILE';
-    }, { passive: false });
-    layer.addEventListener('pointermove', (e) => {
-      if (!pointerDown || e.pointerId !== activePointerId) return;
+      pointers.set(e.pointerId,{lastErase:0});
+      pointerDown=true;
+      try{layer.setPointerCapture(e.pointerId);}catch(_){}
+      const [x,y]=coords(e);
+      if(touchTool==='erase')eraseNearestStroke(x,y);
+      else useStroke('touch-'+e.pointerId,'start',x,y);
+      touchCursor(e);
+      if($('mode-status'))$('mode-status').textContent=touchTool==='erase'?'MODE: GOMME':'MODE: DESSIN MULTITOUCH';
+    },{passive:false});
+    layer.addEventListener('pointermove',e=>{
+      const state=pointers.get(e.pointerId);if(!state)return;
       e.preventDefault();
-      const [x,y] = coords(e);
-      moveStroke(x,y);
-      showCursor(e);
-    }, { passive: false });
-    layer.addEventListener('pointerup', finish);
-    layer.addEventListener('pointercancel', finish);
-    layer.addEventListener('lostpointercapture', finish);
-    window.addEventListener('blur', () => finish(null));
-    document.addEventListener('visibilitychange', () => { if (document.hidden) finish(null); });
+      const events=typeof e.getCoalescedEvents==='function'?e.getCoalescedEvents():[e];
+      for(const item of (events.length?events.slice(-15):[e])){
+        const [x,y]=coords(item);
+        if(touchTool==='erase'){
+          const now=performance.now();
+          if(now-state.lastErase>65){eraseNearestStroke(x,y);state.lastErase=now;}
+        }else useStroke('touch-'+e.pointerId,'move',x,y);
+      }
+      touchCursor(e);
+    },{passive:false});
+    for(const type of ['pointerup','pointercancel','lostpointercapture'])
+      layer.addEventListener(type,finish);
+    window.addEventListener('blur',()=>finish(null));
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)finish(null);});
   }
   async function askMistral(prompt) {
     if (!mistralKey) { ui('La création est gratuite. Pour discuter avec Mistral, saisis ta clé API dans les options.'); return; }
@@ -983,6 +1070,9 @@
     setOrbit: (value) => { stage.orbit=Boolean(value); },
     create: makeStageArtwork,
     undo: undo,
+    clear: clear,
+    setTool: setTouchTool,
+    getTool: () => touchTool,
     snapshot: exportPNG
   });
   window.NeuralArtBIN = Object.freeze({
@@ -1018,7 +1108,13 @@
       if (!painting) { ui('Moteur 3D indisponible.'); return; }
       painting.rotation.set(0, 0, 0); ui('Rotation 3D réinitialisée.');
     });
-    $('clear-paint-btn').addEventListener('click', clear);
+    $('clear-paint-btn').addEventListener('click',()=>{if(window.confirm('Effacer toute la création 3D ?'))clear();});
+    for(const button of document.querySelectorAll('[data-studio-tool]')){
+      button.addEventListener('click',()=>setTouchTool(button.dataset.studioTool));
+    }
+    for(const button of document.querySelectorAll('[data-studio-clear]')){
+      button.addEventListener('click',()=>{if(window.confirm('Effacer toute la création 3D ?'))clear();});
+    }
     $('undo-btn').addEventListener('click', undo);
     $('export-btn').addEventListener('click', exportGLTF);
     $('export-png-btn').addEventListener('click', exportPNG);
