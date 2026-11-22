@@ -1,12 +1,25 @@
-# Neural Art V20.1 — Studio Niko
+# Neural Art V21 — Studio Niko
 
-Atelier de peinture **gestuelle et tactile en 3D**, gratuit pour les fonctions artistiques de base, directement dans un navigateur moderne.
+Atelier de création **tactile et gestuelle 3D**, dédié aussi à la **scénographie live, aux visuels de DJ sets, aux projections et aux films expérimentaux**. Application web gratuite pour le dessin, les motifs procéduraux et l’animation audio locale, sans compte.
+
+## Pourquoi utiliser Neural Art ?
+
+- **Créer des visuels live pour un DJ set** : charger un MP3, un WAV ou autre format audio pris en charge par le navigateur, puis activer le mode « Plein écran · Performance visuelle ». Les sculptures lumineuses pulsent selon les fréquences mesurées localement et peuvent tourner automatiquement.
+- **Fabriquer un décor de clip ou une projection** : réaliser des tracés au doigt ou par gestes caméra, ou générer les compositions procédurales « Vortex », « Fleur 3D » et « Orbites ».
+- **Exporter pour la post-production** : captures PNG, objets GLTF, projets BIN, et capture vidéo jusqu’à deux minutes si MediaRecorder / captureStream et un codec adapté sont disponibles.
+- **Créer sur mobile** : iOS Safari utilise un mode immersif qui masque les panneaux de l’application lorsque le vrai plein écran du navigateur n’est pas disponible. Les barres système peuvent rester visibles.
+
+La fonction « compositions procédurales » est algorithmique : ce n’est pas un modèle de génération d’image ou de vidéo par IA.
 
 **Démo publique :** https://nikoju1977.github.io/Neural-Art-mars-2026/
 
 ## Fonctions intégrées
 
 - Dessin tactile (Android/iPhone) et souris (PC/Mac), sans compte ni clé API.
+- Mode scène immersif avec commandes de sortie, pinceaux accessibles via retour à l’atelier, annulation et capture PNG.
+- Animations audio-réactives via un fichier musical choisi sur l’appareil : pas d’upload et analyse par Web Audio API.
+- Compositions 3D procédurales, avec profondeur et couleur, pouvant être ajoutées à une œuvre existante.
+- Enregistrement vidéo facultatif via les API natives du navigateur, avec lien de téléchargement conservé après sortie du plein écran.
 - Caméra frontale optionnelle et reconnaissance d'une main via MediaPipe Hands.
 - Geste **pouce-index rapprochés** pour dessiner ; doigts écartés pour déplacer la main sans tracer.
 - Détection des mouvements : seuil de pincement relatif à la largeur de la paume, hystérésis pour limiter les faux déclenchements, lissage temporel et tolérance à la disparition brève de la main.
@@ -21,6 +34,9 @@ Atelier de peinture **gestuelle et tactile en 3D**, gratuit pour les fonctions a
 
 ## Utilisation
 
+**Performance visuelle :** créer une forme avec les presets, charger un morceau dans « Scénographie, compositions et musique », puis ouvrir le mode plein écran. La barre flottante permet de jouer/pause, générer une composition, annuler, prendre une photo PNG et lancer/arrêter une capture vidéo si le navigateur le permet. Le clip sauvegardé est également disponible depuis le panneau de scénographie après avoir quitté le plein écran.
+
+
 1. Ouvrir l'application. Le dessin au doigt ou à la souris fonctionne sans clé IA.
 2. Pour peindre avec la main, cliquer sur **Activer la caméra** et accepter la permission.
 3. Avancer la main devant la caméra frontale, rapprocher le pouce et l'index et déplacer la main.
@@ -29,7 +45,7 @@ Atelier de peinture **gestuelle et tactile en 3D**, gratuit pour les fonctions a
 
 ## Technique et limites
 
-- Code statique : `index.html`, `neural-v20.js`, `sw.js`, `manifest.json`, `icon.svg`.
+- Code statique : `index.html`, `neural-v20.js`, `performance-v21.js`, `sw.js`, `manifest.json`, `icon.svg`.
 - Bibliothèques externes : Three.js r128 et MediaPipe Hands. **Internet est nécessaire pour leur premier chargement.**
 - La reconnaissance des mains dépend de l'éclairage, de la visibilité des doigts, du CPU/GPU et des autorisations caméra.
 - La caméra est traitée dans le navigateur, sans envoi intentionnel du flux vidéo au backend de ce projet. Les dépendances externes sont récupérées via CDN.
