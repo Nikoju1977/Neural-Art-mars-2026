@@ -163,11 +163,15 @@
     if (clipURL) URL.revokeObjectURL(clipURL);
     clipURL = URL.createObjectURL(blob);
     const extension = type.includes('mp4') ? 'mp4' : 'webm';
-    const link = $('stage-video-download');
-    link.href = clipURL;
-    link.download = 'Neural-Art-Performance-' + Date.now() + '.' + extension;
-    link.hidden = false;
-    link.textContent = 'Télécharger le clip ' + extension.toUpperCase();
+    const filename = 'Neural-Art-Performance-' + Date.now() + '.' + extension;
+    for (const id of ['stage-video-download','stage-settings-download']) {
+      const link = $(id);
+      if (!link) continue;
+      link.href = clipURL;
+      link.download = filename;
+      link.hidden = false;
+      link.textContent = 'Télécharger le clip ' + extension.toUpperCase();
+    }
     tell('Clip prêt : utilise « Télécharger le clip ». Le son est inclus si l’enregistreur le prend en charge.');
   }
   function stopRecord() {
