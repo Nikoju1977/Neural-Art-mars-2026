@@ -282,22 +282,34 @@
     }
     updateLabels();redraw();status('Harpe à 6 cordes créée. Traverse les cordes avec deux doigts.');
   }
+  function finalizeHandTuning(state){
+    const target=state.holding;
+    if(target?.before){
+      const current=target.s[target.side];
+      if(Math.hypot(current.x-target.before.x,current.y-target.before.y)>.002)
+        undoStack.push({type:'move',s:target.s,side:target.side,before:target.before});
+    }
+    state.holding=null;
+  }
   function onHands(landmarks,mirror){
     if(!visible)return;
     const now=performance.now();
     for(let i=0;i<2;i++){
       const hand=landmarks?.[i],state=handStates[i];
-      if(!hand){state.last=null;state.holding=null;continue;}
+      if(!hand){state.last=null;finalizeHandTuning(state);continue;}
       const index=hand[8],thumb=hand[4];
       if(!index||!thumb)continue;
       const x=(mirror?1-index.x:index.x)*w,y=index.y*h;
       const p={x,y};
       const pinched=Math.hypot(index.x-thumb.x,index.y-thumb.y)<.065;
       if(tool==='edit'&&pinched) {
-        if(!state.holding)state.holding=nearestEnd(p,36);
+        if(!state.holding){
+          state.holding=nearestEnd(p,36);
+          if(state.holding)state.holding.before={...state.holding.s[state.holding.side]};
+        }
         if(state.holding)state.holding.s[state.holding.side]=norm(x,y);
       }else{
-        state.holding=null;
+        finalizeHandTuning(state);
         if(state.last && (tool==='play'||tool==='create'||tool==='edit'))sweep(state.last,p);
       }
       state.last=p;
