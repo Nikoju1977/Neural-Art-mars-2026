@@ -307,6 +307,7 @@
     endStroke();
   }
   function undo() {
+    if(window.NeuralArtStrings?.active())return window.NeuralArtStrings.undo();
     finishAllStrokes();
     const action=history.pop();
     if(action?.type==='draw') {
@@ -1139,7 +1140,10 @@
       button.addEventListener('click',()=>setTouchTool(button.dataset.studioTool));
     }
     for(const button of document.querySelectorAll('[data-studio-clear]')){
-      button.addEventListener('click',()=>{if(window.confirm('Effacer toute la création 3D ?'))clear();});
+      button.addEventListener('click',()=>{
+        if(window.NeuralArtStrings?.active())window.NeuralArtStrings.clear();
+        else if(window.confirm('Effacer toute la création 3D ?'))clear();
+      });
     }
     $('undo-btn').addEventListener('click', undo);
     for(const button of document.querySelectorAll('[data-studio-undo]'))
