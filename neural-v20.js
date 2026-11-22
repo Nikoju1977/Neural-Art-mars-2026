@@ -25,6 +25,8 @@
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   let lastFrameTime = 0;
+  // Le rendu de performance complète le dessin ; aucune génération n'est présentée comme IA.
+  const stage = { enabled: false, energy: 0, orbit: true, lastTime: 0 };
   let handAssetsBase = '';
   const HAND_SOURCES = [
     'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/',
@@ -363,13 +365,22 @@
     // Safari iPhone : rendu 3D à 30 i/s maximum pour limiter température et batterie.
     if (isIOS && !renderer.xr.isPresenting && time-lastFrameTime<32) return;
     lastFrameTime=time;
-    if (background) background.rotation.y = Math.sin(time * .00007) * .22;
+    if (background) {
+      background.rotation.y = Math.sin(time * .00007) * .22;
+      background.material.opacity = stage.enabled ? Math.min(.9, .45 + stage.energy * .35) : .45;
+      background.material.size = stage.enabled ? .19 + stage.energy * .2 : .19;
+    }
+    if (stage.enabled && stage.orbit && !pointerDown && !drawing && !renderer.xr.isPresenting) {
+      const dt = Math.min(60, Math.max(0, time - (stage.lastTime || time)));
+      painting.rotation.y += dt * .00016 * (1 + stage.energy * 1.8);
+    }
+    stage.lastTime = time;
     if (renderer.xr.isPresenting) {
       painting.scale.setScalar(.012);
       painting.position.set(0, 0, -1.3);
       background.visible = false;
     } else {
-      painting.scale.setScalar(1);
+      painting.scale.setScalar(stage.enabled ? 1 + stage.energy * .07 : 1);
       painting.position.set(0, 0, 0);
       background.visible = true;
     }
@@ -912,6 +923,68 @@
     ui(coordinates.length+' points BIN affichés en 3D (normalisés et centrés).');
     return coordinates.length;
   }
+  // Pont public pour la performance : le reste du moteur garde son encapsulation.
+  function makeStageArtwork(kind) {
+    if (!painting || !renderer) throw new Error('Le moteur 3D n’est pas disponible.');
+    if (!['vortex','fleur','orbites'].includes(kind)) throw new Error('Composition inconnue.');
+    endStroke();
+    const oldColor = brushColor, oldMode = brushMode, oldSize = brushSize;
+    const colors = ['#00f2ff','#f95bca','#ffe066','#57ffbc','#aa87ff','#ff8d47'];
+    const layers = kind === 'orbites' ? 7 : kind === 'fleur' ? 6 : 4;
+    const toCreate = Math.min(layers, Math.max(0, maxStrokes-strokes.length));
+    if (!toCreate) throw new Error('Limite de tracés atteinte. Annule ou efface des traits.');
+    let created = 0;
+    try {
+      brushMode='neon'; brushSize=.38;
+      for (let k=0;k<toCreate;k++) {
+        updateColor(colors[k%colors.length]);
+        const count=kind==='fleur'?100:kind==='vortex'?112:94;
+        let createdStroke=null;
+        for(let i=0;i<count;i++) {
+          const t=i/(count-1), a=t*Math.PI*2;
+          let x,y;
+          if(kind==='vortex') {
+            const angle=t*Math.PI*(5.5+k*.25)+k*.65, rad=.045+.34*t;
+            x=.5+Math.cos(angle)*rad; y=.5+Math.sin(angle)*rad*.77;
+          } else if (kind==='fleur') {
+            const rad=.19+.1*Math.cos(6*a+k*.62);
+            x=.5+Math.cos(a)*rad;
+            y=.5+Math.sin(a)*rad*.82;
+          } else {
+            const rad=.09+k*.035;
+            x=.5+Math.cos(a)*rad;
+            y=.5+Math.sin(a)*rad*.85;
+          }
+          if(i===0) { startStroke(x,y); createdStroke=drawing; }
+          else moveStroke(x,y);
+        }
+        endStroke();
+        if(createdStroke) {
+          createdStroke.points.forEach((p,i) => {
+            const t=i/Math.max(1,createdStroke.points.length-1);
+            p.z = kind==='vortex' ? -3+k*2+t*5 :
+              kind==='fleur' ? (k-2.5)*1.4+Math.sin(t*Math.PI*6)*1.3 : (k-3)*2;
+          });
+          refreshStroke(createdStroke);
+          created++;
+        }
+      }
+      updateCount();
+      ui('Composition « '+kind+' » créée : '+created+' tracés. Exporte-la en PNG, GLTF ou BIN.');
+      return created;
+    } finally {
+      brushMode=oldMode; brushSize=oldSize; updateColor(oldColor);
+    }
+  }
+  window.NeuralArtStage = Object.freeze({
+    ready: () => Boolean(renderer && painting),
+    enable: (value) => { stage.enabled=Boolean(value); stage.lastTime=0; },
+    setEnergy: (value) => { stage.energy=Number.isFinite(value)?clamp(value,0,1):0; },
+    setOrbit: (value) => { stage.orbit=Boolean(value); },
+    create: makeStageArtwork,
+    undo: undo,
+    snapshot: exportPNG
+  });
   window.NeuralArtBIN = Object.freeze({
     exportScene:getBinScene,
     importScene:loadBinScene,
