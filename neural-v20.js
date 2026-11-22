@@ -626,31 +626,56 @@
   }
   function installPointer() {
     const layer = $('interaction-layer');
-    const coords = (e) => [e.clientX / innerWidth, e.clientY / innerHeight];
-    layer.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
-      e.preventDefault(); pointerDown = true;
-      try { layer.setPointerCapture(e.pointerId); }
-      catch(err) { /* Capture facultative : Safari peut la refuser après un geste système. */ }
-      const [x,y] = coords(e); endStroke(); startStroke(x,y);
-      const cursor=$('touch-cursor');
-      if (cursor) { cursor.style.display='block'; cursor.style.left=e.clientX+'px';cursor.style.top=e.clientY+'px'; }
-      if ($('mode-status')) $('mode-status').textContent='MODE: DESSIN TACTILE';
-    });
-    layer.addEventListener('pointermove', (e) => {
-      if (!pointerDown) return;
-      e.preventDefault(); const [x,y] = coords(e); moveStroke(x,y);
-      const cursor=$('touch-cursor');
-      if (cursor) { cursor.style.left=e.clientX+'px';cursor.style.top=e.clientY+'px'; }
-    });
-    const finish = () => {
-      pointerDown = false; endStroke();
-      const cursor=$('touch-cursor'); if (cursor) cursor.style.display='none';
-      if ($('mode-status')) $('mode-status').textContent=cameraEnabled ? 'MODE: MAIN' : 'MODE: TACTILE';
+    if (!layer) return;
+    // Un seul pointeur actif : une seconde pression ne peut plus arrêter
+    // le tracé du premier doigt sur Safari iOS.
+    let activePointerId = null;
+    const coords = (e) => {
+      const rect = layer.getBoundingClientRect();
+      return [clamp((e.clientX - rect.left) / Math.max(rect.width, 1), 0, 1),
+        clamp((e.clientY - rect.top) / Math.max(rect.height, 1), 0, 1)];
     };
+    const cursor = $('touch-cursor');
+    const showCursor = (e) => {
+      if (!cursor) return;
+      cursor.style.display = 'block';
+      cursor.style.left = e.clientX + 'px';
+      cursor.style.top = e.clientY + 'px';
+    };
+    const finish = (e) => {
+      // pointercancel et lostpointercapture peuvent arriver dans un ordre variable.
+      if (e && typeof e.pointerId === 'number' && e.pointerId !== activePointerId) return;
+      activePointerId = null;
+      pointerDown = false;
+      endStroke();
+      if (cursor) cursor.style.display = 'none';
+      if ($('mode-status')) $('mode-status').textContent = cameraEnabled ? 'MODE: MAIN' : 'MODE: TACTILE';
+    };
+    layer.addEventListener('pointerdown', (e) => {
+      if (activePointerId !== null || e.isPrimary === false || e.button !== 0) return;
+      e.preventDefault();
+      activePointerId = e.pointerId;
+      pointerDown = true;
+      try { layer.setPointerCapture(e.pointerId); }
+      catch (_) { /* Safari peut refuser une capture ; pointercancel remet alors l'état à zéro. */ }
+      const [x,y] = coords(e);
+      endStroke();
+      startStroke(x,y);
+      showCursor(e);
+      if ($('mode-status')) $('mode-status').textContent = 'MODE: DESSIN TACTILE';
+    }, { passive: false });
+    layer.addEventListener('pointermove', (e) => {
+      if (!pointerDown || e.pointerId !== activePointerId) return;
+      e.preventDefault();
+      const [x,y] = coords(e);
+      moveStroke(x,y);
+      showCursor(e);
+    }, { passive: false });
     layer.addEventListener('pointerup', finish);
     layer.addEventListener('pointercancel', finish);
     layer.addEventListener('lostpointercapture', finish);
+    window.addEventListener('blur', () => finish(null));
+    document.addEventListener('visibilitychange', () => { if (document.hidden) finish(null); });
   }
   async function askMistral(prompt) {
     if (!mistralKey) { ui('La création est gratuite. Pour discuter avec Mistral, saisis ta clé API dans les options.'); return; }
