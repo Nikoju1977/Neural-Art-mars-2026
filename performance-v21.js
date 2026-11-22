@@ -234,7 +234,8 @@
     for(const id of ['stage-snapshot','stage-settings-snapshot']) $(id)?.addEventListener('click',snapshot);
     $('stage-undo')?.addEventListener('click',() => bridge()?.undo());
     $('stage-clear')?.addEventListener('click',()=>{
-      if(window.confirm('Effacer tous les tracés de la peinture 3D ?'))bridge()?.clear();
+      if(window.NeuralArtStrings?.active())window.NeuralArtStrings.clear();
+      else if(window.confirm('Effacer tous les tracés de la peinture 3D ?'))bridge()?.clear();
     });
     $('stage-orbit')?.addEventListener('change',e => bridge()?.setOrbit(e.target.checked));
     fileInput.addEventListener('change',e => loadAudio(e.target.files[0]));
