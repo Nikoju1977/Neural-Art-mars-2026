@@ -12,7 +12,7 @@
   const names=['Do','Do♯','Ré','Ré♯','Mi','Fa','Fa♯','Sol','Sol♯','La','La♯','Si'];
   const colors=['#52efff','#ff6cbe','#ffda71','#7dffba','#b8a1ff','#ff9772','#83d1ff','#ffd1f1'];
   const pointerStates=new Map(), handStates=[{last:null,holding:null},{last:null,holding:null}];
-  const strings=[];
+  const strings=[],undoStack=[];
   const MAX=18;
   let tool='create',visible=false,ctx=null,master=null,recDest=null,noiseBuffer=null;
   let w=1,h=1,scale=1,raf=0,audioNodes=[],statusAt=0;
@@ -124,16 +124,37 @@
     if(distance<48){status('Tends la corde sur au moins 48 pixels.');return;}
     if(strings.length>=MAX){status('18 cordes maximum : retire une corde pour continuer.');return;}
     const s={a:{...a},b:{...b},color:colors[strings.length%colors.length],strum:0,intensity:0};
-    strings.push(s);updateLabels();
+    strings.push(s);undoStack.push({type:'add',s});updateLabels();
     status('Corde '+strings.length+' : '+note(frequency(s))+' ('+Math.round(frequency(s))+' Hz). Passe le doigt dessus pour jouer.');
     pluck(s,.5);
   }
+  function removeString(s){
+    const index=strings.indexOf(s);if(index<0)return;
+    undoStack.push({type:'remove',s,index});
+    strings.splice(index,1);updateLabels();redraw();
+  }
+  function undoStrings(){
+    const action=undoStack.pop();
+    if(!action){status('Aucune action sur les cordes à annuler.');return;}
+    if(action.type==='add'){
+      const index=strings.indexOf(action.s);if(index>=0)strings.splice(index,1);
+    }else if(action.type==='remove'){
+      if(!strings.includes(action.s))strings.splice(Math.min(action.index,strings.length),0,action.s);
+    }else if(action.type==='move'){
+      action.s[action.side]={...action.before};
+    }else if(action.type==='restore'){
+      strings.splice(0,strings.length,...action.before);
+    }
+    updateLabels();redraw();status('Dernière modification des cordes annulée.');
+  }
   function pointerMode(p){
     if(tool==='erase'){const s=nearestString(p);if(s){
-      strings.splice(strings.indexOf(s),1);updateLabels();status('Corde effacée.');
+      removeString(s);status('Corde effacée. Annuler pour la restaurer.');
     }return {type:'erase',last:p};}
     const end=nearestEnd(p);
-    if(end&&(tool==='edit'||tool==='create'))return {type:'move',target:end,last:p};
+    if(end&&(tool==='edit'||tool==='create'))return {
+      type:'move',target:end,before:{...end.s[end.side]},last:p
+    };
     if(tool==='edit')return {type:'play',last:p};
     if(tool==='create'){
       // Un deuxième doigt peut jouer pendant que le premier tend la corde.
@@ -168,15 +189,22 @@
     } else if(state.type==='play'){
       sweep(state.last,p);
     } else if(state.type==='erase'){
-      const s=nearestString(p,16);if(s){strings.splice(strings.indexOf(s),1);updateLabels();}
+      const s=nearestString(p,16);if(s)removeString(s);
     }
     state.last=p;redraw();
   }
   function up(e){
     const state=pointerStates.get(e.pointerId);if(!state)return;
     const p=position(e);
-    if(state.type==='create')addString(state.start,norm(p.x,p.y));
-    if(state.type==='move')pluck(state.target.s,.5);
+    if(state.type==='create'&&e.type==='pointerup')addString(state.start,norm(p.x,p.y));
+    if(state.type==='move'){
+      const item=state.target,after=item.s[item.side];
+      const moved=Math.hypot(after.x-state.before.x,after.y-state.before.y)>.002;
+      if(e.type==='pointerup'&&moved){
+        undoStack.push({type:'move',s:item.s,side:item.side,before:state.before});
+        pluck(item.s,.5);
+      }else if(e.type!=='pointerup')item.s[item.side]={...state.before};
+    }
     pointerStates.delete(e.pointerId);
     redraw();
   }
@@ -242,9 +270,11 @@
   function clearStrings() {
     if(!strings.length){status('Aucune corde à effacer.');return;}
     if(!window.confirm('Supprimer toutes les cordes de cet instrument ?'))return;
-    strings.length=0;updateLabels();redraw();status('Toutes les cordes ont été retirées.');
+    undoStack.push({type:'restore',before:[...strings]});
+    strings.length=0;updateLabels();redraw();status('Toutes les cordes ont été retirées. Annuler pour les restaurer.');
   }
   function demo() {
+    undoStack.push({type:'restore',before:[...strings]});
     strings.length=0;
     for(let i=0;i<6;i++){
       const y=.24+i*.09;
@@ -308,7 +338,7 @@
   }
   window.NeuralArtStrings=Object.freeze({
     active:()=>visible,show:setVisible,hands:onHands,mode,play:()=>mode('play'),create:()=>mode('create'),
-    clear:clearStrings,count:()=>strings.length
+    clear:clearStrings,undo:undoStrings,count:()=>strings.length
   });
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();
