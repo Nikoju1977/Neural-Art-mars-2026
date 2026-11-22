@@ -68,7 +68,8 @@
     const ctx=canvas.getContext('2d');if(!ctx)return;
     const w=canvas.width,h=canvas.height;
     ctx.clearRect(0,0,w,h);
-    const hands=Array.isArray(allHands?.[0])?allHands:(allHands?[allHands]:[]);
+    const hands=Array.isArray(allHands) ?
+      (allHands.length===21 && !Array.isArray(allHands[0])?[allHands]:allHands) : [];
     const chains=[[0,1,2,3,4],[0,5,6,7,8],[5,9,10,11,12],
       [9,13,14,15,16],[13,17,18,19,20],[0,17]];
     hands.slice(0,2).forEach((points,handIndex)=>{
@@ -532,7 +533,15 @@
   // to palm width avoids a fixed pixel threshold across near/far hands.
   // Deux mains suivies indépendamment ; chaque pincement crée un tracé séparé.
   function onHandResults(result) {
-    const found=result.multiHandLandmarks||[];
+    const raw=result.multiHandLandmarks||[];
+    const handedness=result.multiHandedness||[];
+    const found=[null,null];
+    raw.slice(0,2).forEach((points,index)=>{
+      const handLabel=String(handedness[index]?.label||'').toLowerCase();
+      let slot=handLabel==='left'?0:handLabel==='right'?1:-1;
+      if(slot<0||found[slot])slot=found[0]?1:0;
+      found[slot]=points;
+    });
     drawPreviewLandmarks(found);
     if(!cameraEnabled || renderer.xr.isPresenting || pointerDown) {
       for(let i=0;i<2;i++)useStroke('hand-'+i,'end');
@@ -541,7 +550,7 @@
     if(window.NeuralArtStrings?.active()) {
       for(let i=0;i<2;i++)useStroke('hand-'+i,'end');
       window.NeuralArtStrings.hands(found,mirrorCamera);
-      setStatusHands(found.length+' MAIN(S) · CORDES');
+      setStatusHands(found.filter(Boolean).length+' MAIN(S) · CORDES');
       return;
     }
     const now=performance.now();
