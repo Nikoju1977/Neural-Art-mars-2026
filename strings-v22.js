@@ -137,8 +137,8 @@
     if(tool==='edit')return {type:'play',last:p};
     if(tool==='create'){
       // Un deuxième doigt peut jouer pendant que le premier tend la corde.
-      const creating=[...pointerStates.values()].some(s=>s.type==='create');
-      if(!creating)return {type:'create',start:norm(p.x,p.y),last:p};
+      const manipulating=[...pointerStates.values()].some(s=>s.type==='create'||s.type==='move');
+      if(!manipulating)return {type:'create',start:norm(p.x,p.y),last:p};
     }
     const on=nearestString(p,20);
     if(on)pluck(on,.55);
@@ -285,12 +285,23 @@
     document.querySelectorAll('[data-string-tool]').forEach(button=>
       button.addEventListener('click',()=>mode(button.dataset.stringTool)));
     document.querySelectorAll('[data-strings-toggle]').forEach(button=>
-      button.addEventListener('click',()=>setVisible(!visible)));
+      button.addEventListener('click',()=>{
+        if(!visible){
+          try{ensureAudio().resume().catch(()=>{});}
+          catch(e){status('Synthèse audio indisponible : '+e.message);}
+        }
+        setVisible(!visible);
+      }));
     $('strings-demo')?.addEventListener('click',demo);
     $('strings-clear')?.addEventListener('click',clearStrings);
     $('strings-tension')?.addEventListener('input',()=>{
       if(strings.length){const s=strings[strings.length-1],f=frequency(s);$('strings-note').textContent=note(f)+' · '+Math.round(f)+' Hz';}
       redraw();
+    });
+    document.addEventListener('visibilitychange',()=>{
+      if(document.hidden){
+        pointerStates.clear();handStates.forEach(s=>{s.last=null;s.holding=null;});
+      }
     });
     $('strings-volume')?.addEventListener('input',()=>{$('strings-volume-value').textContent=$('strings-volume').value+' %';});
     mode('create');updateLabels();
