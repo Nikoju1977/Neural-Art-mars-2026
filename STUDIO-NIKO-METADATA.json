@@ -1,0 +1,13 @@
+{
+  "schema": "studio-niko-design.provenance/v1",
+  "publisher": "Studio Niko Design",
+  "brand_alias": "Niko Studio Design",
+  "account": "Nikoju1977",
+  "repository": "https://github.com/Nikoju1977/Neural-Art-mars-2026",
+  "record_date": "2026-11-24",
+  "baseline_git_commit": "d0d0d5331e2d5e262c6f611e77e3e56071bf78b1",
+  "rights": "All rights reserved in original contributions to the extent owned; prior licenses and third-party rights remain applicable.",
+  "license_file": "LICENSE.md",
+  "integrity_registry": "https://github.com/Nikoju1977/Nikoju1977/tree/main/provenance",
+  "verification": "Git commit identifiers are not personal signatures or independent timestamps."
+}
