@@ -16,6 +16,7 @@
   let pointerDown = false, tracking = false, recognition = null, voiceEnabled = false;
   let touchTool='draw';
   const multiStroke=new Map(), history=[];
+  const MAX_HISTORY_ACTIONS=64;
   const handMotion=[0,1].map(()=>({x:.5,y:.5,initialized:false,lastTs:0,pinched:false,pinchFrames:0,releaseFrames:0,missed:0,palmX:null,palmY:null}));
   let mistralKey = '', strokes = [], rafCamera = 0;
   const maxStrokes = 160, maxPointsPerStroke = 140;
@@ -226,6 +227,16 @@
       else mesh.material.dispose();
     }
   }
+  // Keep only recent undo actions. Never release a visible or still referenced mesh.
+  function rememberAction(action){
+    history.push(action);
+    const forgotten=new Set();
+    while(history.length>MAX_HISTORY_ACTIONS)forgotten.add(history.shift().stroke);
+    for(const stroke of forgotten){
+      if(!strokes.includes(stroke)&&!history.some(entry=>entry.stroke===stroke))
+        safeDispose(stroke.mesh);
+    }
+  }
   function makeMaterial(mode, color) {
     if (mode === 'sculpture') return new THREE.MeshStandardMaterial({
       color, metalness: 0.25, roughness: 0.28
@@ -258,7 +269,7 @@
     painting.add(mesh);
     drawing = { mesh, points: [point], mode: brushMode, size: brushSize, lastRender: 0 };
     strokes.push(drawing);
-    history.push({type:'draw',stroke:drawing});
+    rememberAction({type:'draw',stroke:drawing});
     updateCount();
   }
   function refreshStroke(stroke) {
@@ -354,10 +365,10 @@
     finishAllStrokes();
     painting.remove(closest.mesh);
     strokes.splice(index,1);
-    // Garde le maillage en mémoire jusqu’à Annuler ; il est libéré à l’effacement complet.
-    history.push({type:'erase',stroke:closest,index});
+    // Retain erased meshes only while a recent undo action references them.
+    rememberAction({type:'erase',stroke:closest,index});
     updateCount();
-    ui('Trait effacé. Appuie sur Annuler pour le restaurer.');
+    ui('Trait effacé. Annuler restaure les modifications récentes (64 actions maximum).');
     return true;
   }
   function setTouchTool(value){

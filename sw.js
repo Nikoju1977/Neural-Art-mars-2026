@@ -1,7 +1,7 @@
 /* Neural Art V22.1 — local application shell cache.
    External 3D/hand libraries require an Internet connection. */
-const CACHE = 'neural-art-v22-3-geometry-reuse';
-const LOCAL_ASSETS = ['./', './index.html', './neural-v20.js?v=22.3', './performance-v21.js?v=22.1', './strings-v22.js?v=22.2', './manifest.json', './icon.svg'];
+const CACHE = 'neural-art-v22-4-bounded-undo';
+const LOCAL_ASSETS = ['./', './index.html', './neural-v20.js?v=22.4', './performance-v21.js?v=22.1', './strings-v22.js?v=22.2', './manifest.json', './icon.svg'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE)
     .then((cache) => cache.addAll(LOCAL_ASSETS))
