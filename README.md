@@ -1,4 +1,40 @@
-# Neural Art V22.1 — Studio Niko
+# Neural Art V22.1
+
+**Gesture-driven 3D art, live visuals and playable virtual strings — in the browser.**
+
+Un atelier de création 3D gestuelle et de scénographie audiovisuelle qui transforme le mouvement, le toucher et le son en matière créative.
+
+![JavaScript](https://img.shields.io/badge/JavaScript-Vanilla-F7DF1E) ![Rendering](https://img.shields.io/badge/Rendering-Three.js-111111) ![Tracking](https://img.shields.io/badge/Tracking-MediaPipe-00897B) ![Audio](https://img.shields.io/badge/Audio-Web_Audio-326CE5) ![License](https://img.shields.io/badge/License-All_rights_reserved-lightgrey)
+
+**STUDIO NIKO DESIGN** · Build smart. Stay lightweight. Create without limits.
+
+[Ouvrir la démo / Open demo](https://nikoju1977.github.io/Neural-Art-mars-2026/) · [Signaler un problème / Report an issue](https://github.com/Nikoju1977/Neural-Art-mars-2026/issues)
+
+> [Insérer ici un GIF de démonstration / Insert demo GIF here]
+
+[English overview](#english-overview) · [Documentation technique](#documentation-technique-fr) · [Roadmap](#roadmap--contribution)
+
+## Pourquoi ce projet ?
+
+Transformer un navigateur en instrument visuel et musical, sans pipeline de production lourd. Les gestes et le son sont traités localement ; Three.js et MediaPipe apportent les capacités spécialisées nécessaires, sans imposer de framework applicatif.
+
+## Architecture & sécurité
+
+```mermaid
+flowchart LR
+  A[Touch or camera] --> B[Gesture processing]
+  B --> C[Three.js scene]
+  D[Local audio file] --> E[Web Audio analysis]
+  E --> C
+  F[Virtual strings] --> G[Karplus-Strong synthesis]
+  C --> H[PNG / GLTF / optional video]
+```
+
+Local camera processing is the intended design, not a blanket privacy guarantee: CDN assets and optional Mistral calls use the network. Camera permission, secure contexts and actual network behavior must be checked. No measured latency or verified cross-device benchmark is asserted.
+
+**État de validation :** inspection documentaire et du code source lors de cette mise à jour ; pas de nouvelle exécution de l'application, de mesure de performance ni de test matériel.
+
+## Documentation technique (FR)
 
 Atelier de création **tactile et gestuelle 3D**, dédié aussi à la **scénographie live, aux visuels de DJ sets, aux projections et aux films expérimentaux**. Application web gratuite pour le dessin, les motifs procéduraux et l’animation audio locale, sans compte.
 
@@ -81,3 +117,30 @@ python3 -m http.server 8000
 Puis ouvrir http://localhost:8000/ dans un navigateur.
 
 Projet : [Nikoju1977](https://github.com/Nikoju1977) — Studio Niko.
+
+## Roadmap & contribution
+
+Prochaines étapes proposées, non présentées comme terminées :
+
+- [ ] Validate two-hand tracking on physical Android and iOS devices.
+- [ ] Measure rendering FPS, gesture latency and memory under long sessions.
+- [ ] Add reproducible tests for BIN/GLTF and recording exports.
+- [ ] Document CDN/offline behavior and optional remote AI boundaries.
+
+Les retours d'utilisation, rapports de bugs et propositions d'amélioration sont les bienvenus via les [issues](https://github.com/Nikoju1977/Neural-Art-mars-2026/issues). Pour une première contribution, rechercher ou proposer une issue portant le label `good first issue` ; ce label n'est pas garanti déjà créé. Les modifications de code doivent respecter la notice de droits existante et, si nécessaire, obtenir l'autorisation du titulaire. Ne jamais publier de clé API, données personnelles ou fichiers sensibles.
+
+## English overview
+
+Neural Art combines touch and two-hand gesture drawing, procedural 3D shapes, audio-reactive visuals and a virtual string instrument. `neural-v20.js` handles gestures and scene interaction; `performance-v21.js` handles local audio analysis and optional recording; `strings-v22.js` implements plucked-string synthesis. Three.js and MediaPipe are external dependencies, initially loaded from CDNs. Optional Mistral requests leave the browser. Camera and recording capabilities vary across devices.
+
+### Quickstart
+
+Clone the repository, run `python3 -m http.server 8000` from its root, and visit http://localhost:8000/. Allow the camera only if needed; the touch mode does not need a camera or AI key.
+
+### Contribution
+
+Document gesture reproduction steps or compare mobile recording support (`good first issue`, suggested label). Feedback is welcome; code contributions and redistribution remain subject to the existing rights notice. No new runtime tests or benchmarks were performed during this documentation update.
+
+## Licence & auteur / License & author
+
+**© 2026 Studio Niko Design — [Nikoju1977](https://github.com/Nikoju1977).** Original contributions are subject to the existing [copyright notice](LICENSE.md), all rights reserved; public source access does not constitute an open-source license. Third-party components retain their own licenses. No license changes are made by this README.
