@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
+const source=readFileSync('sw.js','utf8');
+const scope='https://nikoju1977.github.io/Neural-Art-mars-2026/';
+const current='neural-art-v22-5-isolated-shell',old='neural-art-v22-4-bounded-undo';
+const other=['oracle-du-jardinier-shell-v19','lovestronautes-v31-mixer-save-coalescing','studio-niko-hub-v20','unknown-cache'];
+const keys=new Set([current,old,...other]),deleted=[],handlers={},stored=new Map();
+let offline=false,failPut=false,claims=0,network=0;
+const own={addAll:async assets=>{for(const url of assets)stored.set(url,'cached:'+url);},match:async r=>stored.get(typeof r==='string'?r:r.url),put:async(r,v)=>{if(failPut)throw Error('quota');stored.set(r.url,v);}};
+const response={ok:true,redirected:false,clone(){return 'new';}};
+const context={URL,Set,Promise,Response:{error:()=> 'network-error'},self:{registration:{scope},addEventListener:(n,f)=>handlers[n]=f,skipWaiting:async()=>{},clients:{claim:async()=>claims++}},caches:{keys:async()=>[...keys],delete:async k=>{deleted.push(k);keys.delete(k);},open:async k=>{assert.equal(k,current);return own;},match:()=>{throw Error('Global cache lookup forbidden');}},fetch:async()=>{network++;if(offline)throw Error('offline');return response;}};
+vm.runInNewContext(source,context);
+async function lifecycle(name){let task;handlers[name]({waitUntil:p=>task=p});await task;}
+await lifecycle('install');await lifecycle('activate');assert.deepEqual(deleted,[old]);assert.equal(claims,1);assert.ok(other.every(k=>keys.has(k)));
+const event=(url,mode='cors',method='GET')=>{let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;};
+for(const url of ['https://example.com/index.html','https://nikoju1977.github.io/oracle-du-jardinier/index.html',scope+'api?secret=example',scope+'index.html?key=example',scope+'unlisted.js'])assert.equal(event(url),undefined);
+assert.equal(event(scope+'index.html','cors','POST'),undefined);assert.equal(network,0);
+assert.equal(await event(scope+'index.html','navigate'),response);
+offline=true;assert.equal(await event(scope+'index.html','navigate'),'new');assert.equal(await event(scope+'manifest.json'),'cached:'+scope+'manifest.json');
+stored.delete(scope+'manifest.json');assert.equal(await event(scope+'manifest.json'),'network-error');
+offline=false;failPut=true;assert.equal(await event(scope+'index.html','navigate'),response);
+console.log('PASS activation preserves sibling caches, exact scoped shell allowlist, local-only offline fallback and quota-safe network response');
