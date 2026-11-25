@@ -70,3 +70,6 @@ jobs:
                   assert isinstance(data, dict) and data.get("name"), f"Invalid app name in {name}"
           print("Static HTML, accessibility metadata and PWA manifests verified. Runtime behavior is not tested.")
           PY
+
+      - name: String gesture cancellation regression
+        run: node tests/strings-cancel.mjs

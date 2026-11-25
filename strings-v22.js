@@ -104,9 +104,14 @@
     }
     return target;
   }
+  function endpointBusy(s,side){
+    return [...pointerStates.values()].some(state=>state.type==='move'&&state.target.s===s&&state.target.side===side)||
+      handStates.some(state=>state.holding?.s===s&&state.holding.side===side);
+  }
   function nearestEnd(p,limit=31) {
     let item=null,d=limit;
     for(const s of strings)for(const side of ['a','b']){
+      if(endpointBusy(s,side))continue;
       const q=px(s[side]),distance=Math.hypot(p.x-q.x,p.y-q.y);
       if(distance<d){d=distance;item={s,side};}
     }
@@ -134,6 +139,7 @@
     strings.splice(index,1);updateLabels();redraw();
   }
   function undoStrings(){
+    cancelGestures();
     const action=undoStack.pop();
     if(!action){status('Aucune action sur les cordes à annuler.');return;}
     if(action.type==='add'){
@@ -166,6 +172,7 @@
     return {type:'play',last:p};
   }
   function down(e){
+    if((e.pointerType==='mouse'&&e.button!==0)||pointerStates.has(e.pointerId))return;
     e.preventDefault();
     try{ensureAudio().resume().catch(()=>{});}catch(err){status(err.message);}
     const p=position(e);
@@ -208,10 +215,25 @@
     pointerStates.delete(e.pointerId);
     redraw();
   }
+  // Interruptions discard only uncommitted tuning, never completed edits.
+  function cancelGestures(){
+    for(const [id,state] of pointerStates){
+      if(state.type==='move')state.target.s[state.target.side]={...state.before};
+    }
+    const ids=[...pointerStates.keys()];pointerStates.clear();
+    for(const state of handStates){
+      const target=state.holding;
+      if(target?.before)target.s[target.side]={...target.before};
+      state.holding=null;state.last=null;
+    }
+    // Clear tracking first: releasing capture may dispatch lostpointercapture.
+    for(const id of ids){try{if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);}catch(_){}}
+    redraw();
+  }
   function mode(next) {
     if(!['create','play','edit','erase'].includes(next))return;
+    cancelGestures();
     tool=next;
-    pointerStates.clear();
     for(const button of document.querySelectorAll('[data-string-tool]'))
       button.setAttribute('aria-pressed',String(button.dataset.stringTool===tool));
     status(({create:'Tends une corde du premier point au second.',play:'Gratte les cordes avec un ou plusieurs doigts.',
@@ -219,9 +241,9 @@
     redraw();
   }
   function setVisible(value) {
+    cancelGestures();
     visible=Boolean(value);layer.hidden=!visible;
     document.body.classList.toggle('strings-active',visible);
-    pointerStates.clear();
     if(visible){resize();redraw();status('Instrument actif : tends une corde et pince-la. Deux mains acceptées.');}
     else {if(raf)cancelAnimationFrame(raf);raf=0;status('Instrument fermé : retour à la peinture 3D.');}
     for(const button of document.querySelectorAll('[data-strings-toggle]')){
@@ -270,10 +292,12 @@
   function clearStrings() {
     if(!strings.length){status('Aucune corde à effacer.');return;}
     if(!window.confirm('Supprimer toutes les cordes de cet instrument ?'))return;
+    cancelGestures();
     undoStack.push({type:'restore',before:[...strings]});
     strings.length=0;updateLabels();redraw();status('Toutes les cordes ont été retirées. Annuler pour les restaurer.');
   }
   function demo() {
+    cancelGestures();
     undoStack.push({type:'restore',before:[...strings]});
     strings.length=0;
     for(let i=0;i<6;i++){
@@ -298,7 +322,11 @@
       const hand=landmarks?.[i],state=handStates[i];
       if(!hand){state.last=null;finalizeHandTuning(state);continue;}
       const index=hand[8],thumb=hand[4];
-      if(!index||!thumb)continue;
+      if(!index||!thumb){
+        const target=state.holding;
+        if(target?.before)target.s[target.side]={...target.before};
+        state.holding=null;state.last=null;continue;
+      }
       const x=(mirror?1-index.x:index.x)*w,y=index.y*h;
       const p={x,y};
       const pinched=Math.hypot(index.x-thumb.x,index.y-thumb.y)<.065;
@@ -340,10 +368,9 @@
       if(strings.length){const s=strings[strings.length-1],f=frequency(s);$('strings-note').textContent=note(f)+' · '+Math.round(f)+' Hz';}
       redraw();
     });
+    window.addEventListener('blur',cancelGestures);
     document.addEventListener('visibilitychange',()=>{
-      if(document.hidden){
-        pointerStates.clear();handStates.forEach(s=>{s.last=null;s.holding=null;});
-      }
+      if(document.hidden)cancelGestures();
     });
     $('strings-volume')?.addEventListener('input',()=>{$('strings-volume-value').textContent=$('strings-volume').value+' %';});
     mode('create');updateLabels();
