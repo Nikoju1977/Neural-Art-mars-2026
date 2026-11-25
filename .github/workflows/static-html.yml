@@ -76,3 +76,6 @@ jobs:
 
       - name: Geometry reuse and background rendering regression
         run: node tests/geometry-reuse.mjs
+
+      - name: Bounded undo geometry lifecycle regression
+        run: node tests/bounded-undo.mjs
