@@ -73,3 +73,6 @@ jobs:
 
       - name: String gesture cancellation regression
         run: node tests/strings-cancel.mjs
+
+      - name: Geometry reuse and background rendering regression
+        run: node tests/geometry-reuse.mjs

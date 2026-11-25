@@ -262,7 +262,8 @@
     updateCount();
   }
   function refreshStroke(stroke) {
-    if (stroke.points.length < 2) return;
+    // Points are append-only; avoid rebuilding a tube already rendered at this length.
+    if (stroke.points.length < 2 || stroke.renderedPointCount === stroke.points.length) return;
     const points = stroke.points;
     const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
     const radius = stroke.mode === 'filament' ? stroke.size * .1 :
@@ -272,17 +273,18 @@
     stroke.mesh.geometry.dispose();
     stroke.mesh.geometry = geo;
     stroke.mesh.position.set(0, 0, 0);
+    stroke.renderedPointCount = points.length;
   }
   function moveStroke(x, y) {
     if (!drawing) { startStroke(x, y); return; }
     const point = normalizedPoint(x, y);
     const old = drawing.points[drawing.points.length - 1];
     const delta = point.distanceTo(old);
-    if (delta < Math.max(.13, brushSize * .12)) return;
+    if (delta < Math.max(.13, drawing.size * .12)) return;
     if (delta > 18) { endStroke(); startStroke(x, y); return; }
     drawing.points.push(point);
     if (drawing.points.length >= maxPointsPerStroke) {
-      refreshStroke(drawing); endStroke(); return;
+      endStroke(); return;
     }
     const now = performance.now();
     if (now - drawing.lastRender > 25) { refreshStroke(drawing); drawing.lastRender = now; }
@@ -407,6 +409,7 @@
   }
   function exportPNG() {
     try {
+      finishAllStrokes();
       renderer.render(scene, camera);
       renderer.domElement.toBlob((blob) => {
         saveBlob(blob, 'Neural-Art-' + Date.now() + '.png');
@@ -434,7 +437,7 @@
     throw new Error('Chargeur d’export 3D inaccessible. Connecte-toi à Internet et réessaie.');
   }
   async function exportGLTF() {
-    endStroke();
+    finishAllStrokes();
     if (!strokes.length) { ui('Dessine avant de lancer un export 3D.'); return; }
     try {
       await ensureGLTFExporter();
@@ -455,6 +458,7 @@
   }
   function renderFrame(time) {
     if (!renderer || !scene || !camera) return;
+    if (document.hidden && !renderer.xr.isPresenting) return;
     // Safari iPhone : rendu 3D à 30 i/s maximum pour limiter température et batterie.
     if (isIOS && !renderer.xr.isPresenting && time-lastFrameTime<32) return;
     lastFrameTime=time;
@@ -463,7 +467,7 @@
       background.material.opacity = stage.enabled ? Math.min(.9, .45 + stage.energy * .35) : .45;
       background.material.size = stage.enabled ? .19 + stage.energy * .2 : .19;
     }
-    if (stage.enabled && stage.orbit && !pointerDown && !drawing && !renderer.xr.isPresenting) {
+    if (stage.enabled && stage.orbit && !pointerDown && !drawing && multiStroke.size===0 && !renderer.xr.isPresenting) {
       const dt = Math.min(60, Math.max(0, time - (stage.lastTime || time)));
       painting.rotation.y += dt * .00016 * (1 + stage.energy * 1.8);
     }
