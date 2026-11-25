@@ -79,3 +79,6 @@ jobs:
 
       - name: Bounded undo geometry lifecycle regression
         run: node tests/bounded-undo.mjs
+
+      - name: PWA cache isolation regression
+        run: node tests/cache-isolation.mjs
